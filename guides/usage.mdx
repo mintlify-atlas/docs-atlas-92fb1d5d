@@ -86,7 +86,7 @@ When your query mentions `{{}}` syntax, `$json`, or expression errors, this skil
     "Find me a Slack node"
     "How do I search for database nodes?"
     "Validate this node configuration"
-    "What's the difference between get_node_info and get_node_essentials?"
+    "What's the difference between get_node detail levels?"
     "Which MCP tool should I use to create workflows?"
     ```
   </Tab>
@@ -111,9 +111,9 @@ When your query mentions `{{}}` syntax, `$json`, or expression errors, this skil
     ⚠️ Important: Use different formats for different tools!
 
     Next, get node details:
-    get_node_essentials({nodeType: "nodes-base.slack"})
+    get_node({nodeType: "nodes-base.slack"})
 
-    This returns focused 5 KB data vs 100 KB+ from get_node_info.
+    This returns ~1-2K tokens with standard detail (default), covering 95% of use cases.
     ```
   </Tab>
 </Tabs>
@@ -150,7 +150,7 @@ When your query mentions `{{}}` syntax, `$json`, or expression errors, this skil
 
     Workflow Checklist:
     □ Search for nodes (search_nodes)
-    □ Get node configurations (get_node_essentials)
+    □ Get node configurations (get_node)
     □ Create workflow structure
     □ Add data mappings (expressions)
     □ Validate workflow
@@ -191,7 +191,7 @@ When your query mentions `{{}}` syntax, `$json`, or expression errors, this skil
     Validation Error: "Required field 'channel' missing"
 
     Fix:
-    validate_node_operation({
+    validate_node({
       nodeType: "nodes-base.slack",
       config: {
         resource: "message",
@@ -438,20 +438,23 @@ When your query mentions `{{}}` syntax, `$json`, or expression errors, this skil
 | Tool | Availability |
 |---|---|
 | `search_nodes` | Always available |
-| `list_nodes` | Always available |
-| `get_node_essentials` | Always available |
-| `validate_node_minimal` | Always available |
-| `validate_node_operation` | Always available |
+| `get_node` | Always available |
+| `validate_node` | Always available |
 | `validate_workflow` | Always available |
-| `get_property_dependencies` | Always available |
 | `search_templates` | Always available |
 | `get_template` | Always available |
+| `tools_documentation` | Always available |
+| `ai_agents_guide` | Always available |
 | `n8n_create_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
 | `n8n_update_partial_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
 | `n8n_validate_workflow` (by ID) | Requires `N8N_API_URL` + `N8N_API_KEY` |
 | `n8n_list_workflows` | Requires `N8N_API_URL` + `N8N_API_KEY` |
 | `n8n_get_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
-| `n8n_trigger_webhook_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_test_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_executions` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_deploy_template` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_workflow_versions` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_autofix_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
 
 ---
 

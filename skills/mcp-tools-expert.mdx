@@ -436,6 +436,7 @@ n8n_workflow_versions({
     - `validate_node`, `validate_workflow`
     - `search_templates`, `get_template`
     - `tools_documentation`, `ai_agents_guide`
+    - `n8n_health_check`
 
   </Tab>
   <Tab title="Requires n8n API">
@@ -525,6 +526,23 @@ await n8n_update_partial_workflow({
   intent: "Activate for production",
   operations: [{type: "activateWorkflow"}]
 });
+```
+
+## Self-Help Tools
+
+```javascript
+// Get documentation for any tool
+tools_documentation()                                         // All tools overview
+tools_documentation({topic: "search_nodes", depth: "full"}) // Specific tool details
+tools_documentation({topic: "javascript_code_node_guide", depth: "full"})
+tools_documentation({topic: "python_code_node_guide", depth: "full"})
+
+// AI agent workflow guide
+ai_agents_guide()  // Architecture, connections, tools, validation, best practices
+
+// Health check
+n8n_health_check()                       // Quick status check
+n8n_health_check({mode: "diagnostic"})   // Full diagnostics: env vars, tool status, API connectivity
 ```
 
 ## Best Practices
