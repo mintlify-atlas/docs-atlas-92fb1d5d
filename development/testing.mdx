@@ -1,0 +1,309 @@
+---
+title: "Testing"
+description: "How evaluations work in n8n-skills and how to write, run, and iterate on test scenarios."
+---
+
+## Evaluation-First Development
+
+n8n-skills uses an **Evaluation-Driven Development (EDD)** approach: evaluations are written *before* the skill, not after. This ensures every skill solves real, measurable problems.
+
+<Note>
+  Write your evaluation scenarios before writing a single line of SKILL.md. Evaluations define what "done" looks like.
+</Note>
+
+The full cycle for a new skill:
+
+```
+1. Create 3+ evaluation scenarios
+2. Test baseline (without skill) to confirm the problem exists
+3. Write minimal SKILL.md
+4. Test against evaluations
+5. Iterate until 100% pass
+6. Add reference files as needed
+```
+
+**Why this works:** It ensures skills solve real problems and can be tested objectively, rather than optimizing for content that sounds good but doesn't measurably improve AI behavior.
+
+---
+
+## Evaluation File Format
+
+Each evaluation is a JSON file in `evaluations/[skill-name]/`. The filename follows the pattern `eval-NNN-kebab-case-description.json`.
+
+```json
+{
+  "id": "skill-001",
+  "skills": ["skill-name"],
+  "query": "User question or scenario",
+  "expected_behavior": [
+    "Skill should identify X",
+    "Skill should provide Y guidance",
+    "Skill should reference Z content"
+  ],
+  "baseline_without_skill": {
+    "likely_response": "Generic answer",
+    "expected_quality": "Low"
+  },
+  "with_skill_expected": {
+    "response_quality": "High",
+    "uses_skill_content": true,
+    "provides_correct_guidance": true
+  }
+}
+```
+
+### Real examples
+
+Here are two evaluation files from the `expression-syntax` skill that illustrate good evaluation design:
+
+<Tabs>
+  <Tab title="Basic usage (eval-001)">
+    ```json
+    {
+      "id": "expr-001",
+      "skills": ["n8n-expression-syntax"],
+      "query": "I'm trying to access an email field in my n8n Slack node using $json.email but it's showing as literal text '$json.email' in the message. What's wrong?",
+      "expected_behavior": [
+        "Identifies missing curly braces around the expression",
+        "Explains that n8n expressions must be wrapped in {{ }}",
+        "Provides the corrected expression: {{$json.email}}",
+        "Explains that without braces, it's treated as literal text",
+        "References expression format documentation from SKILL.md"
+      ],
+      "baseline_without_skill": {
+        "likely_response": "May suggest general JavaScript or template syntax, might not know n8n-specific {{ }} requirement",
+        "expected_quality": "Low - lacks n8n-specific knowledge about expression syntax"
+      },
+      "with_skill_expected": {
+        "response_quality": "High - precise fix with n8n-specific guidance",
+        "uses_skill_content": true,
+        "provides_correct_syntax": true,
+        "explains_why_it_failed": true
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Critical gotcha (eval-002)">
+    ```json
+    {
+      "id": "expr-002",
+      "skills": ["n8n-expression-syntax"],
+      "query": "My webhook workflow is showing {{$json.name}} as undefined even though I'm sending {\"name\": \"John\"} in the webhook POST request. What am I doing wrong?",
+      "expected_behavior": [
+        "Identifies that webhook data is nested under .body property",
+        "Explains the webhook node output structure",
+        "Provides the corrected expression: {{$json.body.name}}",
+        "Shows the complete webhook data structure with headers, params, query, and body",
+        "Emphasizes this is a CRITICAL gotcha specific to webhook nodes"
+      ],
+      "baseline_without_skill": {
+        "likely_response": "May suggest debugging or checking data format, unlikely to know webhook-specific structure",
+        "expected_quality": "Low - would miss the webhook .body nesting"
+      },
+      "with_skill_expected": {
+        "response_quality": "High - identifies webhook-specific issue immediately",
+        "uses_skill_content": true,
+        "provides_correct_syntax": true,
+        "explains_webhook_structure": true,
+        "warns_about_common_gotcha": true
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Common mistake (eval-003)">
+    ```json
+    {
+      "id": "expr-003",
+      "skills": ["n8n-expression-syntax"],
+      "query": "I'm trying to use {{$json.email}} in my Code node to get the email address, but it's not working. The code shows the literal string '{{$json.email}}' instead of the value. How do I fix this?",
+      "expected_behavior": [
+        "Identifies that Code nodes use direct JavaScript access, NOT expressions",
+        "Explains that {{ }} syntax is NOT used inside Code nodes",
+        "Provides the corrected Code node syntax: $json.email or $input.item.json.email",
+        "Explains when NOT to use expressions (Code nodes, Function nodes)",
+        "References Code node guide or documentation"
+      ],
+      "baseline_without_skill": {
+        "likely_response": "May suggest template literal syntax or string interpolation",
+        "expected_quality": "Low - would not understand Code node vs expression node difference"
+      },
+      "with_skill_expected": {
+        "response_quality": "High - immediately identifies Code node vs expression context",
+        "uses_skill_content": true,
+        "provides_correct_code_syntax": true,
+        "explains_when_not_to_use_expressions": true,
+        "clear_distinction_between_contexts": true
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## How Many Evaluations?
+
+Every skill needs a minimum of 3 evaluations. The existing skills in the project follow this coverage pattern:
+
+| Skill | Evaluations |
+|-------|-------------|
+| expression-syntax | 4 |
+| mcp-tools | 5 |
+| code-javascript | varies |
+| code-python | varies |
+| node-configuration | varies |
+| validation-expert | varies |
+| workflow-patterns | varies |
+
+Aim for at least:
+1. **Basic usage** — the most common trigger query
+2. **Common mistake** — a specific error the skill should help fix
+3. **Advanced scenario** — a more complex or edge-case query
+
+---
+
+## Running Evaluations Manually
+
+There is no automated evaluation runner yet. Test each scenario by hand:
+
+<Steps>
+  <Step title="Start Claude Code">
+    Launch Claude Code with the skill loaded from your `skills/` directory.
+  </Step>
+
+  <Step title="Ask the evaluation query">
+    Copy the `query` field from the evaluation JSON exactly as written and send it.
+  </Step>
+
+  <Step title="Check expected behaviors">
+    Go through each item in `expected_behavior` and verify whether the response satisfies it. Be specific — vague confirmation does not count.
+  </Step>
+
+  <Step title="Document results">
+    Mark each behavior as PASS or FAIL. A scenario only passes when every expected behavior is present.
+  </Step>
+
+  <Step title="Iterate if needed">
+    If any behaviors fail, update SKILL.md to address the gap and re-run. Repeat until 100% of scenarios pass.
+  </Step>
+</Steps>
+
+```bash
+# Manual test via CLI (if testing framework available)
+npm test
+
+# Or manually with Claude
+claude-code --skill n8n-expression-syntax "Test webhook data access"
+```
+
+<Info>
+  An automated evaluation framework is planned for a future release. Until then, manual testing against evaluation JSON files is the standard process.
+</Info>
+
+---
+
+## What Makes a Good Evaluation?
+
+<Tabs>
+  <Tab title="Good">
+    **Characteristics of effective evaluations:**
+    - Specific, measurable expected behaviors (not "gives a good answer")
+    - Based on real user queries that have actually been seen
+    - Covers both common and edge cases
+    - Includes a `baseline_without_skill` that shows what a generic response would miss
+    - Each `expected_behavior` item is independently verifiable
+
+    **Example of a specific, measurable behavior:**
+    ```json
+    "expected_behavior": [
+      "Provides the corrected expression: {{$json.body.name}}",
+      "Explains the webhook node output structure",
+      "Warns this is a CRITICAL gotcha specific to webhook nodes"
+    ]
+    ```
+  </Tab>
+
+  <Tab title="Bad">
+    **Patterns to avoid:**
+    - Vague expected behaviors like "provides helpful guidance"
+    - Unrealistic scenarios that no user would actually ask
+    - Missing `baseline_without_skill` comparison
+    - Scenarios that are either too trivial or impossibly complex
+    - Expected behaviors that overlap or cannot be independently checked
+
+    **Example of a vague, unmeasurable behavior:**
+    ```json
+    "expected_behavior": [
+      "Helps the user understand expressions",
+      "Gives good advice"
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Test Quality Criteria
+
+Before considering a skill complete, confirm all of the following:
+
+- All evaluations pass (every `expected_behavior` item verified)
+- Skill activates correctly on the trigger query
+- Content in the response is accurate
+- All code examples in the response actually work
+- Baseline comparison confirms meaningful improvement over no-skill response
+
+---
+
+## MCP Tool Testing
+
+Before writing any skill content, test the relevant MCP tools and record real responses. This ensures the skill content is grounded in actual tool behavior.
+
+Document findings in `docs/MCP_TESTING_LOG.md`:
+
+```markdown
+## [Your Skill Name] - MCP Testing
+
+### Tool: tool_name
+
+**Test**:
+```javascript
+tool_name({param: "value"})
+```
+
+**Response**:
+```json
+{actual response}
+```
+
+**Key Insights**:
+- Finding 1
+- Finding 2
+```
+
+Record:
+- Actual tool responses (copy verbatim)
+- Performance timings
+- Gotchas discovered
+- Format differences between tool modes
+- Real error messages returned
+
+See `docs/MCP_TESTING_LOG.md` in the repository for the full log of MCP testing performed for the existing 7 skills.
+
+---
+
+## Iterating to 100%
+
+It is expected that the first version of a SKILL.md will not pass all evaluations. The process is iterative:
+
+1. Run all evaluations and record which behaviors pass or fail
+2. Identify patterns — are failures concentrated in one section?
+3. Update the relevant section of SKILL.md (or add a reference file)
+4. Re-run the failed evaluations
+5. Continue until every scenario passes every expected behavior
+
+<Warning>
+  Do not submit a skill with failing evaluations. The 100% pass rate requirement is not a target — it is the definition of done.
+</Warning>

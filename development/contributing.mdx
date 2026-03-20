@@ -1,0 +1,415 @@
+---
+title: "Contributing"
+description: "Guidelines for contributing new skills and improvements to the n8n-skills project."
+---
+
+## Development Philosophy
+
+All contributions to n8n-skills follow five core principles that ensure every skill is accurate, testable, and useful:
+
+<CardGroup cols={2}>
+  <Card title="Evaluation-First" icon="flask">
+    Write test scenarios before writing any skill content. Evaluations define success criteria upfront.
+  </Card>
+  <Card title="MCP-Informed" icon="server">
+    All content is based on real MCP tool responses, not assumptions. Test tools first, then document.
+  </Card>
+  <Card title="Iterative" icon="arrows-rotate">
+    Test against evaluations, iterate on SKILL.md, and repeat until every scenario passes at 100%.
+  </Card>
+  <Card title="Concise" icon="scissors">
+    Keep SKILL.md under 500 lines. Split complex content into focused reference files.
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Real Examples Only" icon="check">
+    Never invent examples. Use real templates from n8n-mcp, actual MCP tool responses, and verified node configurations.
+  </Card>
+</CardGroup>
+
+---
+
+## Adding a New Skill
+
+<Steps>
+  <Step title="Define Scope">
+    Before writing any code, answer these questions:
+    - What problem does this skill solve?
+    - When should it activate?
+    - What MCP tools will it teach?
+    - What are 3 key examples?
+
+    Document your answers in `skills/[skill-name]/README.md`.
+  </Step>
+
+  <Step title="Create Evaluations">
+    Create at least 3 evaluation scenarios in `evaluations/[skill-name]/` **before** writing the skill.
+
+    Cover these cases:
+    1. Basic usage
+    2. A common mistake
+    3. An advanced scenario
+
+    See the [Testing](/development/testing) page for the full evaluation file format and examples.
+  </Step>
+
+  <Step title="Test MCP Tools">
+    Run the relevant MCP tools and document real responses in `docs/MCP_TESTING_LOG.md`:
+
+    ```javascript
+    // Node discovery
+    search_nodes({query: "keyword"})
+    list_nodes({category: "trigger"})
+    get_node_essentials({nodeType: "nodes-base.webhook"})
+
+    // Validation
+    validate_node_minimal({nodeType: "nodes-base.slack", config: {}})
+    validate_node_operation({nodeType: "nodes-base.slack", config: {...}, profile: "runtime"})
+
+    // Templates
+    search_templates({query: "webhook"})
+    get_template({templateId: 2947, mode: "structure"})
+    ```
+
+    Record actual responses, performance timings, gotchas discovered, and real error messages.
+  </Step>
+
+  <Step title="Write SKILL.md">
+    Create `skills/[skill-name]/SKILL.md` with the required frontmatter and recommended structure.
+
+    **Required frontmatter:**
+
+    ```markdown
+    ---
+    name: Skill Name
+    description: When to use this skill. Use when [trigger conditions].
+    ---
+    ```
+
+    **Recommended structure:**
+
+    ```markdown
+    # Skill Name
+
+    ## Quick Reference
+    [Table or list of most common patterns]
+
+    ## Core Concepts
+    [Essential knowledge]
+
+    ## Common Patterns
+    [Real examples with code]
+
+    ## Common Mistakes
+    [Errors and fixes]
+
+    ## Advanced Topics
+    [Link to reference files]
+
+    ## Related Skills
+    [Cross-references]
+    ```
+
+    Keep SKILL.md under 500 lines. Move detailed content to reference files.
+  </Step>
+
+  <Step title="Add Reference Files">
+    Create focused reference files in the skill directory as needed:
+
+    | File | Purpose |
+    |------|----------|
+    | `COMMON_MISTAKES.md` | Error catalog with fixes |
+    | `EXAMPLES.md` | Working, tested examples |
+    | `PATTERNS.md` | Common usage patterns |
+    | `ADVANCED.md` | Deep-dive topics |
+
+    Each file should be focused on one topic, under 200 lines, and cross-linked from SKILL.md.
+  </Step>
+
+  <Step title="Test Against Evaluations">
+    Run each evaluation scenario manually:
+    1. Start Claude Code with the skill loaded
+    2. Ask the evaluation query
+    3. Check whether all expected behaviors occur
+    4. Document results
+    5. Iterate on SKILL.md if behaviors are missing
+    6. Repeat until 100% of scenarios pass
+
+  </Step>
+
+  <Step title="Document Metadata">
+    Update `skills/[skill-name]/README.md` with complete metadata:
+
+    ```markdown
+    # Skill Name
+
+    **Purpose**: One-sentence description
+
+    **Activates on**: keyword1, keyword2, keyword3
+
+    **File Count**: X files, ~Y lines
+
+    **Dependencies**:
+    - n8n-mcp tools: tool1, tool2
+    - Other skills: skill1, skill2
+
+    **Coverage**:
+    - Topic 1
+    - Topic 2
+    - Topic 3
+
+    **Evaluations**: X scenarios (X% pass rate)
+
+    **Last Updated**: YYYY-MM-DD
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Skill File Structure
+
+```
+skills/skill-name/
+  SKILL.md              # Main content (under 500 lines)
+  COMMON_MISTAKES.md    # Error catalog
+  EXAMPLES.md           # Working examples
+  README.md             # Metadata
+  [optional].md         # Additional references
+```
+
+Evaluations live separately:
+
+```
+evaluations/skill-name/
+  eval-001-short-description.json
+  eval-002-short-description.json
+  eval-003-short-description.json
+```
+
+Evaluation files follow the naming pattern `eval-NNN-kebab-case-description.json`.
+
+---
+
+## SKILL.md Frontmatter
+
+Every SKILL.md must begin with valid YAML frontmatter containing two required fields:
+
+```markdown
+---
+name: Exact Skill Name
+description: When this skill activates. Use when [triggers]. Include specific keywords.
+---
+```
+
+The `description` field drives automatic activation — it must contain the specific keywords and trigger phrases that match real user queries.
+
+**Activation examples from the existing 7 skills:**
+
+| Query | Skill Activated |
+|-------|-----------------|
+| "How do I write n8n expressions?" | n8n Expression Syntax |
+| "Find me a Slack node" | n8n MCP Tools Expert |
+| "Build a webhook workflow" | n8n Workflow Patterns |
+| "Why is validation failing?" | n8n Validation Expert |
+| "How do I configure the HTTP Request node?" | n8n Node Configuration |
+| "How do I access webhook data in a Code node?" | n8n Code JavaScript |
+| "Can I use pandas in Python Code node?" | n8n Code Python |
+
+---
+
+## Cross-Skill Integration
+
+Skills are designed to work together. When writing a new skill, consider how it composes with the existing seven:
+
+- **n8n Workflow Patterns** — identifies the right architectural structure
+- **n8n MCP Tools Expert** — finds and validates nodes
+- **n8n Node Configuration** — guides operation-aware setup
+- **n8n Expression Syntax** — handles data mapping in expression nodes
+- **n8n Code JavaScript / Python** — covers custom logic in Code nodes
+- **n8n Validation Expert** — validates the final workflow
+
+Add cross-references in SKILL.md using relative links:
+
+```markdown
+See [n8n MCP Tools Expert](../n8n-mcp-tools-expert/SKILL.md)
+See [COMMON_MISTAKES.md](COMMON_MISTAKES.md)
+See template #2947 for example
+```
+
+---
+
+## Code Style Guidelines
+
+### Markdown formatting
+
+```markdown
+# H1 - Skill Title
+## H2 - Major Sections
+### H3 - Subsections
+
+**Bold** for emphasis
+`code` for inline code
+```language for code blocks
+```
+
+Always specify the language on code blocks and include comments. Use real, working examples sourced from MCP tool testing.
+
+### JSON (Evaluations)
+
+```json
+{
+  "id": "kebab-case-id",
+  "skills": ["exact-skill-name"],
+  "query": "Natural user question",
+  "expected_behavior": [
+    "Specific measurable behavior"
+  ]
+}
+```
+
+---
+
+## Quality Checklist
+
+Before submitting a skill, verify all of the following:
+
+<AccordionGroup>
+  <Accordion title="Content Quality">
+    - All examples tested with real MCP tools
+    - No invented or fake examples
+    - SKILL.md under 500 lines
+    - Clear, actionable guidance
+    - Real error messages included
+
+  </Accordion>
+
+  <Accordion title="Testing">
+    - 3+ evaluations created
+    - All evaluations pass
+    - Baseline comparison documented
+    - Cross-skill integration tested
+
+  </Accordion>
+
+  <Accordion title="Documentation">
+    - Frontmatter correct (name and description fields present)
+    - README.md metadata complete
+    - MCP_TESTING_LOG.md updated
+    - Cross-references to related skills added
+    - Examples documented
+
+  </Accordion>
+
+  <Accordion title="Code Standards">
+    - Markdown properly formatted
+    - Code blocks have language specified
+    - Consistent naming conventions
+    - Proper git commits
+
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Git Workflow
+
+### Branch naming
+
+```bash
+# New skill
+git checkout -b skill/skill-name
+
+# Bug fix
+git checkout -b fix/issue-description
+```
+
+### Commit message format
+
+```
+type(scope): brief description
+
+Longer description if needed.
+
+Refs: #issue-number
+```
+
+Commit types: `feat` (new skill/feature), `fix` (bug fix), `docs` (documentation), `test` (evaluations), `refactor` (improvement).
+
+**Examples:**
+
+```
+feat(expression-syntax): add webhook data structure guide
+fix(mcp-tools): correct nodeType format examples
+docs(usage): add cross-skill composition examples
+test(validation): add auto-sanitization evaluation
+```
+
+### Pull request template
+
+Include evaluation results, MCP testing performed, and confirm documentation is updated:
+
+```markdown
+## Description
+[What changed and why]
+
+## Evaluations
+- [ ] eval-001: PASS
+- [ ] eval-002: PASS
+- [ ] eval-003: PASS
+
+## MCP Testing
+- Tested tools: [list]
+- New findings: [list]
+
+## Documentation
+- [ ] SKILL.md updated
+- [ ] README.md updated
+- [ ] MCP_TESTING_LOG.md updated
+
+## Checklist
+- [ ] SKILL.md under 500 lines
+- [ ] Real examples only
+- [ ] All evaluations pass
+- [ ] Cross-references added
+```
+
+---
+
+## Common Pitfalls
+
+<Warning>
+Never invent examples or data. If you cannot verify it with a real MCP tool call, do not include it in a skill.
+</Warning>
+
+<Tip>
+If SKILL.md is approaching 500 lines, move detailed content into a focused reference file (e.g., `ADVANCED.md`) and link to it from SKILL.md.
+</Tip>
+
+**Avoid:**
+- Exceeding 500 lines in SKILL.md
+- Writing skills without evaluations
+- Using generic error messages instead of real ones
+- Skipping MCP tool testing
+- Assuming tool behavior without verification
+
+**Do:**
+- Test tools and document responses in MCP_TESTING_LOG.md
+- Use real templates and configurations
+- Write evaluations first, then the skill
+- Cross-reference related skills
+- Verify all code examples actually work
+
+---
+
+## Get Help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="bug" href="https://github.com/czlonkowski/n8n-skills/issues">
+    Report bugs or request new skills
+  </Card>
+  <Card title="GitHub Discussions" icon="comments" href="https://github.com/czlonkowski/n8n-skills/discussions">
+    Ask questions or share ideas
+  </Card>
+</CardGroup>

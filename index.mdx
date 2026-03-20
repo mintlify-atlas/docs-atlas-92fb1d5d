@@ -1,97 +1,124 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "n8n Skills"
+description: "Expert Claude Code skills for building flawless n8n workflows using the n8n-mcp MCP server"
+mode: "custom"
 ---
 
-## Setting up
+<div style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)", padding: "80px 40px", textAlign: "center", borderRadius: "12px", marginBottom: "48px" }}>
+  <div style={{ display: "inline-block", background: "#7c747c", borderRadius: "8px", padding: "8px 16px", marginBottom: "20px" }}>
+    <span style={{ color: "#f9f9f9", fontSize: "13px", fontWeight: "600", letterSpacing: "0.05em" }}>FOR CLAUDE CODE · CLAUDE.AI · CLAUDE API</span>
+  </div>
+  <h1 style={{ fontSize: "48px", fontWeight: "700", color: "#f9f9f9", margin: "0 0 20px 0", lineHeight: "1.2", fontFamily: "Inter, sans-serif" }}>Build Flawless n8n Workflows</h1>
+  <p style={{ fontSize: "20px", color: "#a0a0a0", maxWidth: "600px", margin: "0 auto 36px auto", lineHeight: "1.6" }}>
+    7 expert Claude Code skills that teach AI assistants how to create production-ready n8n workflows using the n8n-mcp MCP server.
+  </p>
+  <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
+    <a href="/quickstart" style={{ background: "#7c747c", color: "#f9f9f9", padding: "12px 28px", borderRadius: "4px", textDecoration: "none", fontWeight: "600", fontSize: "15px" }}>Get Started</a>
+    <a href="/skills/overview" style={{ background: "transparent", color: "#f9f9f9", padding: "12px 28px", borderRadius: "4px", textDecoration: "none", fontWeight: "600", fontSize: "15px", border: "1px solid #555" }}>Browse Skills</a>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={3}>
+  <Card title="525+ Nodes Supported" icon="circle-check">
+    Full coverage of n8n's node library with expert guidance on configuration and dependencies
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="2,653+ Templates" icon="layer-group">
+    Real-world workflow templates used as grounding for patterns and examples
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Automatic Activation" icon="bolt">
+    Skills activate automatically when your query matches their domain — no manual invocation needed
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## The 7 Skills
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Expression Syntax" icon="code" href="/skills/expression-syntax">
+    Master n8n's `{{}}` expression syntax, core variables, and the critical webhook `.body` gotcha
+  </Card>
+  <Card title="MCP Tools Expert" icon="wrench" href="/skills/mcp-tools-expert">
+    Use n8n-mcp tools correctly — right tool, right format, right validation profile
+  </Card>
+  <Card title="Workflow Patterns" icon="diagram-project" href="/skills/workflow-patterns">
+    5 proven architectural patterns: webhook, HTTP API, database, AI agent, and scheduled
+  </Card>
+  <Card title="Validation Expert" icon="shield-check" href="/skills/validation-expert">
+    Interpret validation errors, handle false positives, and use auto-fix effectively
+  </Card>
+  <Card title="Node Configuration" icon="sliders" href="/skills/node-configuration">
+    Operation-aware configuration with property dependency chains and AI connection types
+  </Card>
+  <Card title="Code: JavaScript" icon="js" href="/skills/code-javascript">
+    Write effective JavaScript in Code nodes with correct data access patterns and return formats
+  </Card>
+  <Card title="Code: Python" icon="python" href="/skills/code-python">
+    Use Python in Code nodes with full awareness of library limitations and workarounds
+  </Card>
+  <Card title="Skills Overview" icon="grid" href="/skills/overview">
+    See how all 7 skills complement each other and when each one activates
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## How It Works
 
-## Need inspiration?
+<Steps>
+  <Step title="Install n8n-mcp MCP server">
+    Set up the n8n-mcp server which provides access to 800+ nodes, validation, templates, and workflow management tools.
+    ```bash
+    npm install -g n8n-mcp
+    ```
+  </Step>
+  <Step title="Install the skills">
+    Install the skills as a Claude Code plugin with a single command:
+    ```bash
+    /plugin install czlonkowski/n8n-skills
+    ```
+  </Step>
+  <Step title="Ask Claude to build workflows">
+    Skills activate automatically based on your query. No configuration needed.
+    ```
+    "Build a webhook to Slack notification workflow"
+    → Activates: Workflow Patterns + MCP Tools + Expression Syntax + Validation
+    ```
+  </Step>
+</Steps>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Skills Work Together
+
+When you ask Claude to **"Build and validate a webhook to Slack workflow"**, multiple skills activate and collaborate automatically:
+
+<CardGroup cols={2}>
+  <Card title="1. Workflow Patterns" icon="diagram-project">
+    Identifies the webhook processing pattern and provides the node structure
+  </Card>
+  <Card title="2. MCP Tools Expert" icon="wrench">
+    Searches for webhook and Slack nodes using `search_nodes`, gets configuration with `get_node`
+  </Card>
+  <Card title="3. Expression Syntax" icon="code">
+    Maps webhook data correctly: `{{$json.body.name}}` not `{{$json.name}}`
+  </Card>
+  <Card title="4. Validation Expert" icon="shield-check">
+    Validates the complete workflow and interprets any errors
+  </Card>
+</CardGroup>
+
+<Note>
+  Skills compose seamlessly — the more specific your request, the more skills collaborate to give you a complete, validated, production-ready result.
+</Note>
+
+## Quick Links
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Detailed installation for Claude Code, Claude.ai, and the Claude API/SDK
+  </Card>
+  <Card title="Usage Guide" icon="book-open" href="/guides/usage">
+    Example queries, activation triggers, and best practices
+  </Card>
+  <Card title="Workflow Patterns" icon="diagram-project" href="/guides/workflow-patterns-overview">
+    Deep dive into the 5 proven n8n workflow architectural patterns
+  </Card>
+  <Card title="Troubleshooting" icon="bug" href="/guides/troubleshooting">
+    Fix common issues: skills not activating, MCP tools unavailable, API errors
+  </Card>
+</CardGroup>

@@ -1,0 +1,461 @@
+---
+title: "n8n Expression Syntax"
+description: "Complete guide to writing correct n8n expressions: `{{}}` syntax, core variables, webhook data structure, common mistakes, and advanced patterns."
+---
+
+# n8n Expression Syntax
+
+All dynamic content in n8n uses **double curly braces**:
+
+```javascript
+{{expression}}
+```
+
+```javascript
+// ✅ Valid expressions
+{{$json.email}}
+{{$json.body.name}}
+{{$node["HTTP Request"].json.data}}
+
+// ❌ Invalid — missing or wrong braces
+$json.email       // treated as literal text
+{$json.email}     // single braces — invalid
+```
+
+<Warning>
+**Webhook data is NOT at the root of `$json`.**
+
+Webhook nodes wrap all incoming data under a `.body` property. Always access webhook fields as `{{$json.body.fieldName}}`, never `{{$json.fieldName}}`.
+
+```javascript
+// ❌ WRONG
+{{$json.name}}
+{{$json.email}}
+
+// ✅ CORRECT
+{{$json.body.name}}
+{{$json.body.email}}
+```
+</Warning>
+
+## Core Variables
+
+### `$json` — Current Node Output
+
+Access data from the current node in the workflow:
+
+```javascript
+{{$json.fieldName}}
+{{$json['field with spaces']}}
+{{$json.nested.property}}
+{{$json.items[0].name}}
+```
+
+### `$node` — Reference Other Nodes
+
+Access data from any previous node by name:
+
+```javascript
+{{$node["Node Name"].json.fieldName}}
+{{$node["HTTP Request"].json.data}}
+{{$node["Webhook"].json.body.email}}
+```
+
+<Note>
+Node names **must** be in quotes inside brackets. Node names are **case-sensitive** and must match the exact name in your workflow.
+</Note>
+
+### `$now` — Current Timestamp
+
+Access and format the current date/time using Luxon:
+
+```javascript
+{{$now}}
+{{$now.toFormat('yyyy-MM-dd')}}
+{{$now.toFormat('HH:mm:ss')}}
+{{$now.plus({days: 7})}}
+```
+
+### `$env` — Environment Variables
+
+Access n8n environment variables:
+
+```javascript
+{{$env.API_KEY}}
+{{$env.DATABASE_URL}}
+```
+
+## Webhook Data Structure
+
+The webhook node wraps all incoming request data:
+
+```javascript
+// Full $json structure from a Webhook node
+{
+  "headers": {"content-type": "application/json"},
+  "params":  {},
+  "query":   {},
+  "body": {              // ⚠️ User data is HERE
+    "name": "John",
+    "email": "john@example.com",
+    "message": "Hello"
+  }
+}
+```
+
+**In a Slack node text field after a Webhook:**
+```text
+New form submission!
+
+Name: {{$json.body.name}}
+Email: {{$json.body.email}}
+Message: {{$json.body.message}}
+```
+
+## Common Patterns
+
+### Nested Fields
+
+```javascript
+// Simple nesting
+{{$json.user.email}}
+
+// Array access
+{{$json.data[0].name}}
+{{$json.items[0].id}}
+
+// Bracket notation for spaces in field names
+{{$json['field name']}}
+{{$json['user data']['first name']}}
+```
+
+### Combining Variables
+
+```javascript
+// Inline concatenation (automatic)
+Hello {{$json.body.name}}!
+
+// In URLs
+https://api.example.com/users/{{$json.body.user_id}}
+
+// In JSON parameters
+{
+  "name": "={{$json.body.name}}",
+  "email": "={{$json.body.email}}"
+}
+```
+
+### Multi-Node Data Flow
+
+```javascript
+// Reference previous node by name
+{{$node["Webhook"].json.body.order_id}}
+{{$node["HTTP Request"].json.data.items[0].name}}
+```
+
+## When NOT to Use Expressions
+
+<Warning>
+**Do not use `{{}}` expressions inside Code nodes.** Code nodes use direct JavaScript/Python — the `{{}}` syntax is for expression fields in other node types only.
+</Warning>
+
+<Tabs>
+  <Tab title="Code Nodes">
+```javascript
+// ❌ WRONG in Code node
+const email = '={{$json.email}}';
+const name = '{{$json.body.name}}';
+
+// ✅ CORRECT in Code node
+const email = $json.email;
+const name = $json.body.name;
+
+// Or using the $input API
+const email = $input.item.json.email;
+const allItems = $input.all();
+```
+  </Tab>
+  <Tab title="Webhook Paths">
+```javascript
+// ❌ WRONG — webhook paths must be static
+path: "{{$json.user_id}}/webhook"
+
+// ✅ CORRECT — use static paths
+path: "user-webhook"
+
+// For dynamic parameters, use URL path params instead
+path: "user-webhook/:userId"
+```
+  </Tab>
+  <Tab title="Credential Fields">
+```javascript
+// ❌ WRONG — credentials use n8n's credential system
+apiKey: "={{$env.API_KEY}}"
+
+// ✅ CORRECT
+// Configure API keys through the Credentials section, not parameters
+```
+  </Tab>
+</Tabs>
+
+## Data Type Handling
+
+<Tabs>
+  <Tab title="Arrays">
+```javascript
+// First item
+{{$json.users[0].email}}
+
+// Array length
+{{$json.users.length}}
+
+// Last item
+{{$json.users[$json.users.length - 1].name}}
+
+// Join all emails
+{{$json.users.map(u => u.email).join(', ')}}
+```
+  </Tab>
+  <Tab title="Objects">
+```javascript
+// Dot notation (no spaces)
+{{$json.user.email}}
+
+// Bracket notation (spaces or dynamic keys)
+{{$json['user data'].email}}
+```
+  </Tab>
+  <Tab title="Strings">
+```javascript
+// Auto-concatenation
+Hello {{$json.name}}!
+
+// String methods
+{{$json.email.toLowerCase()}}
+{{$json.name.toUpperCase()}}
+{{$json.message.trim()}}
+{{$json.message.replace('old', 'new')}}
+```
+  </Tab>
+  <Tab title="Numbers">
+```javascript
+// Direct use
+{{$json.price}}
+
+// Math operations
+{{$json.price * 1.1}}   // Add 10%
+{{$json.quantity + 5}}
+```
+  </Tab>
+</Tabs>
+
+## Advanced Patterns
+
+### Conditional Content
+
+```javascript
+// Ternary operator
+{{$json.status === 'active' ? 'Active User' : 'Inactive User'}}
+
+// Default values
+{{$json.email || 'no-email@example.com'}}
+
+// Multiple conditions
+{{$json.order.total > 100 ? 'Premium Customer' : 'Standard Customer'}}
+```
+
+### Date Manipulation
+
+```javascript
+// Add days
+{{$now.plus({days: 7}).toFormat('yyyy-MM-dd')}}
+
+// Subtract hours
+{{$now.minus({hours: 24}).toISO()}}
+
+// Specific date formatting
+{{DateTime.fromISO('2025-12-25').toFormat('MMMM dd, yyyy')}}
+// Result: December 25, 2025
+```
+
+### String Manipulation
+
+```javascript
+// Substring
+{{$json.email.substring(0, 5)}}
+
+// Replace
+{{$json.message.replace('World', 'n8n')}}
+
+// Split and join
+{{$json.tags.split(',').join(', ')}}
+```
+
+## Common Mistakes Quick Reference
+
+| Mistake | Fix |
+|---------|-----|
+| `$json.field` | `{{$json.field}}` |
+| `{{$json.field name}}` | `{{$json['field name']}}` |
+| `{{$node.HTTP Request}}` | `{{$node["HTTP Request"]}}` |
+| `{{{$json.field}}}` | `{{$json.field}}` |
+| `{{$json.name}}` (from webhook) | `{{$json.body.name}}` |
+| `'={{$json.email}}'` (in Code node) | `$json.email` |
+| `{{$json.items.0.name}}` | `{{$json.items[0].name}}` |
+| `` `Hello ${$json.name}` `` (template literal) | `Hello {{$json.name}}` |
+| `{{$node["HTTP Request"].data}}` | `{{$node["HTTP Request"].json.data}}` |
+
+## Complete Error Catalog
+
+<AccordionGroup>
+  <Accordion title="Missing curly braces">
+**Symptom**: Field shows literal text like `$json.email` instead of the actual value.
+
+```text
+❌ $json.email
+✅ {{$json.email}}
+```
+  </Accordion>
+  <Accordion title="Webhook body access">
+**Symptom**: Undefined values when accessing webhook data even though the data is being sent.
+
+```javascript
+// Webhook structure:
+{
+  "headers": {...},
+  "params": {},
+  "query": {},
+  "body": { "name": "John" }  // Data is HERE
+}
+
+// Fix:
+❌ {{$json.name}}
+✅ {{$json.body.name}}
+```
+  </Accordion>
+  <Accordion title="Spaces in field names">
+**Symptom**: Syntax error or undefined when the field definitely exists.
+
+```javascript
+❌ {{$json.first name}}
+✅ {{$json['first name']}}
+
+❌ {{$json.user data.email}}
+✅ {{$json['user data'].email}}
+```
+  </Accordion>
+  <Accordion title="Spaces in node names">
+**Symptom**: Error like `"Cannot read property 'Request' of undefined"`.
+
+```javascript
+❌ {{$node.HTTP Request.json.data}}
+✅ {{$node["HTTP Request"].json.data}}
+```
+  </Accordion>
+  <Accordion title="Wrong node name case">
+**Symptom**: Undefined value even though the node exists and has data.
+
+```javascript
+❌ {{$node["http request"].json.data}}   // lowercase
+❌ {{$node["Http Request"].json.data}}   // wrong case
+✅ {{$node["HTTP Request"].json.data}}   // exact match
+```
+  </Accordion>
+  <Accordion title="Double wrapping">
+**Symptom**: Output shows `{{value}}` instead of the actual value.
+
+```javascript
+❌ {{{$json.field}}}
+✅ {{$json.field}}
+```
+  </Accordion>
+  <Accordion title="Array access with dots">
+**Symptom**: Syntax error or undefined.
+
+```javascript
+❌ {{$json.items.0.name}}
+✅ {{$json.items[0].name}}
+```
+  </Accordion>
+  <Accordion title="Using = prefix outside JSON mode">
+**Symptom**: Output shows `=john@example.com` instead of `john@example.com`.
+
+```javascript
+// In text fields (no = needed)
+❌ Email: ={{$json.email}}
+✅ Email: {{$json.email}}
+
+// In JSON mode (= IS needed to set whole value to expression)
+{
+  "email": "={{$json.body.email}}"
+}
+```
+  </Accordion>
+  <Accordion title="Missing .json in $node reference">
+**Symptom**: Undefined value when you know the node has data.
+
+```javascript
+❌ {{$node["HTTP Request"].data}}      // Missing .json
+✅ {{$node["HTTP Request"].json.data}}
+
+❌ {{$node["Webhook"].body.email}}     // Missing .json
+✅ {{$node["Webhook"].json.body.email}}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Debugging Expressions
+
+<Steps>
+  <Step title="Open the expression editor">
+    Click the field containing the expression, then click the **fx** icon to open the expression editor.
+  </Step>
+  <Step title="Check the live preview">
+    The expression editor shows a live preview of the result. Check for values appearing as `undefined` or error messages highlighted in red.
+  </Step>
+  <Step title="Common error messages">
+    - **"Cannot read property 'X' of undefined"** → Parent object doesn't exist; check your data path
+    - **"X is not a function"** → Calling a method on the wrong type; check the variable type
+    - **Expression shows as literal text** → Missing `{{ }}`; add curly braces
+
+  </Step>
+  <Step title="Follow the debugging checklist">
+    1. Is it wrapped in `{{ }}`?
+    2. Is it webhook data? Add `.body`
+    3. Does the field or node name have spaces? Use bracket notation
+    4. Does the node name case match exactly?
+    5. Is the property path correct? Check the data structure in the editor
+    6. Is this inside a Code node? Remove `{{ }}`
+
+  </Step>
+</Steps>
+
+## Expression Helper Reference
+
+| Type | Available Methods |
+|------|------------------|
+| String | `.toLowerCase()`, `.toUpperCase()`, `.trim()`, `.replace()`, `.substring()`, `.split()`, `.includes()` |
+| Array | `.length`, `.map()`, `.filter()`, `.find()`, `.join()`, `.slice()`, `.reduce()` |
+| DateTime (Luxon) | `.toFormat()`, `.toISO()`, `.toLocal()`, `.plus()`, `.minus()`, `.set()` |
+| Number | `.toFixed()`, `.toString()`, `+`, `-`, `*`, `/`, `%` |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Do" icon="check">
+    - Always use `{{ }}` for dynamic content
+    - Use bracket notation for field names with spaces
+    - Access webhook data from `.body`
+    - Use `$node` to reference data from earlier nodes
+    - Test expressions in the expression editor
+
+  </Card>
+  <Card title="Don't" icon="xmark">
+    - Use `{{ }}` inside Code nodes
+    - Forget quotes around node names with spaces
+    - Double-wrap with extra `{{ }}`
+    - Assume webhook data is at the root
+    - Use expressions in webhook paths or credential fields
+
+  </Card>
+</CardGroup>

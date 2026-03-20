@@ -1,0 +1,166 @@
+---
+title: "Skills Overview"
+description: "How the 7 n8n-skills work together as an integrated system for building flawless n8n workflows."
+---
+
+# Skills Overview
+
+The n8n-skills project is a collection of 7 complementary skills that teach AI assistants how to build flawless n8n workflows using the n8n-mcp MCP server. Each skill activates automatically based on context and query keywords, and they are designed to compose together across complex tasks.
+
+## The 7 Skills at a Glance
+
+<CardGroup cols={2}>
+  <Card title="MCP Tools Expert" icon="wrench" href="/skills/mcp-tools-expert">
+    **HIGHEST PRIORITY.** Master guide for using n8n-mcp tools: node discovery, validation, workflow management, templates, and deployment.
+  </Card>
+  <Card title="Expression Syntax" icon="code" href="/skills/expression-syntax">
+    Correct n8n expression syntax using `{{}}` patterns. Covers `$json`, `$node`, `$now`, `$env`, and the critical webhook `.body` gotcha.
+  </Card>
+  <Card title="Workflow Patterns" icon="diagram-project" href="/skills/workflow-patterns">
+    5 proven architectural patterns: webhook processing, HTTP API integration, database operations, AI agents, and scheduled tasks.
+  </Card>
+  <Card title="Validation Expert" icon="circle-check" href="/skills/validation-expert">
+    Interpret and fix validation errors. Handles false positives, validation loops, and the auto-sanitization system.
+  </Card>
+  <Card title="Node Configuration" icon="sliders" href="/skills/node-configuration">
+    Operation-aware configuration guidance. Property dependencies, `displayOptions` rules, and common configuration patterns.
+  </Card>
+  <Card title="JavaScript Code Nodes" icon="js" href="/skills/code-javascript">
+    Write JavaScript in n8n Code nodes. Data access patterns, built-in helpers, return format requirements, and production patterns.
+  </Card>
+  <Card title="Python Code Nodes" icon="python" href="/skills/code-python">
+    Write Python in n8n Code nodes. Standard library usage, limitations, and when to use JavaScript instead.
+  </Card>
+</CardGroup>
+
+## Skill Activation Triggers
+
+Each skill activates automatically when your query matches its description. The system uses frontmatter `description` fields to route the right skill.
+
+| Skill | Activation Keywords | Primary Use Case |
+|-------|--------------------|-----------------|
+| MCP Tools Expert | search nodes, find node, validate, create workflow, deploy, n8n-mcp tool | Using n8n-mcp MCP tools effectively |
+| Expression Syntax | n8n expression, `{{}}` syntax, `$json`, `$node`, webhook data, expression error | Writing correct n8n expressions |
+| Workflow Patterns | build workflow, webhook processing, API integration, database sync, AI agent, scheduled task | Workflow architecture and design |
+| Validation Expert | validation error, validation warning, false positive, operator structure, validation loop | Interpreting and fixing validation errors |
+| Node Configuration | configure node, property dependencies, required fields, operation config | Operation-aware node setup |
+| JavaScript Code Node | JavaScript in n8n, `$input`, `$helpers`, Code node, DateTime | Writing JavaScript code in n8n |
+| Python Code Node | Python in n8n, `_input`, `_json`, Python Code node | Writing Python code in n8n |
+
+## Automatic Activation System
+
+Skills activate through Claude's skill system using the frontmatter `description` field. When a user query matches the description semantically, the skill's full content is loaded into context. This means:
+
+- Skills are **lazy-loaded** — only activated when relevant
+- **Multiple skills** can activate simultaneously for complex tasks
+- Skills **cross-reference** each other to guide users to related content
+- Activation is **zero-configuration** — no explicit invocation needed
+
+<Info>
+The skill descriptions are carefully worded to trigger on natural language queries. For example, asking "How do I write a webhook workflow?" activates the Workflow Patterns skill, which then references the Expression Syntax skill for data access.
+</Info>
+
+## Cross-Skill Composition
+
+The skills are designed to compose together. Here is a real example showing which skill handles each part of a combined scenario:
+
+### Example: "Build and validate a webhook to Slack workflow"
+
+<Steps>
+  <Step title="Identify the pattern (Workflow Patterns skill)">
+    The Workflow Patterns skill identifies this as a **Webhook Processing** pattern:
+    `Webhook → Validate → Transform → Respond/Notify`
+
+    It tells you the nodes needed: Webhook, Set (optional transform), Slack.
+  </Step>
+  <Step title="Find and understand nodes (MCP Tools Expert skill)">
+    The MCP Tools Expert skill guides you to:
+    ```javascript
+    // Step 1: Find the Slack node
+    search_nodes({query: "slack"})
+    // Returns: nodes-base.slack
+
+    // Step 2: Understand its operations
+    get_node({nodeType: "nodes-base.slack", includeExamples: true})
+    // Returns: message.post, channel.create, etc.
+    ```
+  </Step>
+  <Step title="Configure the webhook data access (Expression Syntax skill)">
+    The Expression Syntax skill provides the critical rule:
+    ```
+    // Webhook data is under .body — NOT at the root!
+    ✅ {{$json.body.name}}
+    ❌ {{$json.name}}
+    ```
+
+    In the Slack node's text field:
+    ```
+    New form submission!
+    Name: {{$json.body.name}}
+    Email: {{$json.body.email}}
+    ```
+  </Step>
+  <Step title="Configure the Slack node (Node Configuration skill)">
+    The Node Configuration skill explains operation-aware dependencies:
+    - `resource: "message"` + `operation: "post"` requires `channel` and `text`
+    - Different operations need different fields — always check after switching operations
+
+    ```javascript
+    {
+      resource: "message",
+      operation: "post",
+      channel: "#general",
+      text: "New form submission!\nName: ={{$json.body.name}}"
+    }
+    ```
+  </Step>
+  <Step title="Validate the workflow (Validation Expert + MCP Tools Expert)">
+    The Validation Expert skill guides the validation loop:
+    ```javascript
+    // Validate each node
+    validate_node({
+      nodeType: "nodes-base.slack",
+      config: {...},
+      profile: "runtime"  // Recommended profile
+    })
+
+    // Then validate the complete workflow
+    n8n_validate_workflow({id: "workflow-id"})
+    ```
+
+    Expect 2–3 validate → fix cycles (avg 23s thinking, 58s fixing).
+  </Step>
+  <Step title="Activate and deploy (MCP Tools Expert skill)">
+    ```javascript
+    n8n_update_partial_workflow({
+      id: "workflow-id",
+      intent: "Activate webhook to Slack workflow for production",
+      operations: [{type: "activateWorkflow"}]
+    })
+    ```
+  </Step>
+</Steps>
+
+### Skill Responsibility Map for This Example
+
+| Task | Skill Used |
+|------|------------|
+| Identify webhook → Slack pattern | Workflow Patterns |
+| Find `nodes-base.slack` nodeType | MCP Tools Expert |
+| Know that webhook data is under `.body` | Expression Syntax |
+| Know `message.post` requires `channel` + `text` | Node Configuration |
+| Run `validate_node` with `runtime` profile | MCP Tools Expert |
+| Interpret `missing_required` errors | Validation Expert |
+| Fix operator structure issues automatically | Validation Expert (auto-sanitization) |
+| Activate via `activateWorkflow` operation | MCP Tools Expert |
+
+## Recommended Skill Order
+
+For most workflow-building tasks, use skills in this order:
+
+1. **Workflow Patterns** → Identify the right pattern
+2. **MCP Tools Expert** → Find nodes and manage the workflow
+3. **Node Configuration** → Configure operations correctly
+4. **Expression Syntax** → Write data access expressions
+5. **JavaScript / Python Code** → Add custom logic if needed
+6. **Validation Expert** → Validate and fix errors before deploying

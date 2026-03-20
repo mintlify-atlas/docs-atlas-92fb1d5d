@@ -1,0 +1,591 @@
+---
+title: "Workflow Patterns"
+description: "Five proven architectural patterns for building n8n workflows, with real examples, node structures, and a pattern selection guide."
+---
+
+## Overview
+
+The **n8n Workflow Patterns** skill teaches five proven architectural patterns drawn from analysis of real-world n8n usage. These five patterns cover over 90% of automation use cases.
+
+<CardGroup cols={2}>
+  <Card title="Webhook Processing" icon="webhook" href="#webhook-processing">
+    Receive HTTP requests from external systems and process them instantly. The most common pattern (35% of workflows).
+  </Card>
+  <Card title="HTTP API Integration" icon="cloud" href="#http-api-integration">
+    Fetch data from REST APIs, transform it, and use it in your workflow. Ideal for data pipelines.
+  </Card>
+  <Card title="Database Operations" icon="database" href="#database-operations">
+    Read, write, sync, and manage database data. For ETL, data sync, and maintenance tasks.
+  </Card>
+  <Card title="AI Agent Workflow" icon="robot" href="#ai-agent-workflow">
+    Build AI agents with tool access, memory, and reasoning capabilities.
+  </Card>
+  <Card title="Scheduled Tasks" icon="clock" href="#scheduled-tasks">
+    Recurring automation workflows that run automatically on a time-based schedule.
+  </Card>
+</CardGroup>
+
+---
+
+## Pattern Selection Guide
+
+Choose based on what triggers the workflow and what it does with data:
+
+| Pattern | Use When | Example |
+|---|---|---|
+| **Webhook Processing** | An external system pushes data to you | Stripe payment webhook → Update DB → Send receipt |
+| **HTTP API Integration** | You need to pull data from external APIs | Fetch GitHub issues → Transform → Create Jira tickets |
+| **Database Operations** | Syncing, ETL, or scheduled DB maintenance | Read Postgres records → Transform → Write to MySQL |
+| **AI Agent Workflow** | Need AI with tool access and reasoning | Chat with AI that can search docs, query DB, send emails |
+| **Scheduled Tasks** | Recurring reports, monitoring, or maintenance | Daily: Fetch analytics → Generate report → Email team |
+
+---
+
+## Webhook Processing
+
+**Use when**: Receiving data from external systems (Slack commands, form submissions, payment webhooks, GitHub events)
+
+**Key characteristic**: Instant, event-driven processing
+
+### Node Structure
+
+```
+Webhook → [Validate] → [Transform] → [Action] → [Response/Notify]
+```
+
+### Configuration Notes
+
+<Warning>
+  The most common webhook mistake: webhook payload data is nested under `$json.body`, not at the root level.
+
+  ```
+  ❌ {{$json.email}}        → undefined
+  ✅ {{$json.body.email}}   → "john@example.com"
+  ```
+</Warning>
+
+The webhook node supports two response modes:
+
+| Mode | Behavior | Use When |
+|---|---|---|
+| `onReceived` | Immediate 200 OK, workflow continues in background | Long-running workflows, fire-and-forget |
+| `lastNode` | Wait for completion, send custom response | Synchronous processing, form submissions with confirmation |
+
+### Example Use Cases
+
+<Tabs>
+  <Tab title="Form Submissions">
+    ```
+    1. Webhook (path: "contact-form", POST)
+    2. IF (check email & message not empty)
+    3. Postgres (insert into contacts table)
+    4. Email (send confirmation to user)
+    5. Slack (notify team in #leads)
+    6. Webhook Response ({"status": "success"})
+    ```
+
+    Data access:
+    ```javascript
+    Name:    {{$json.body.name}}
+    Email:   {{$json.body.email}}
+    Message: {{$json.body.message}}
+    ```
+  </Tab>
+  <Tab title="GitHub Webhooks">
+    ```
+    1. Webhook (path: "github", POST)
+    2. IF (check $json.body.action equals "opened")
+    3. Set (extract PR details: title, author, url)
+    4. Slack (notify #dev-team)
+    5. Webhook Response (200 OK)
+    ```
+
+    Data access:
+    ```javascript
+    Event Type: {{$json.headers['x-github-event']}}
+    Action:     {{$json.body.action}}
+    PR Title:   {{$json.body.pull_request.title}}
+    Author:     {{$json.body.pull_request.user.login}}
+    ```
+  </Tab>
+  <Tab title="Chat Integrations">
+    ```
+    1. Webhook (path: "slack-command", POST)
+    2. Code (parse Slack payload)
+    3. HTTP Request (fetch data from API)
+    4. Set (format Slack message)
+    5. Webhook Response (immediate reply)
+    ```
+
+    Data access:
+    ```javascript
+    Command:    {{$json.body.command}}
+    Text:       {{$json.body.text}}
+    User ID:    {{$json.body.user_id}}
+    Channel ID: {{$json.body.channel_id}}
+    ```
+  </Tab>
+</Tabs>
+
+### Template References
+
+From the n8n template library (1,085 webhook templates):
+- **Simple Form to Slack**: `Webhook → Set → Slack`
+- **Payment Processing**: `Webhook → Verify Signature → Update Database → Send Receipt → Notify Admin`
+- **Chat Bot**: `Webhook → Parse Command → AI Agent → Format Response → Webhook Response`
+
+---
+
+## HTTP API Integration
+
+**Use when**: Fetching data from external APIs, synchronizing with third-party services, or building data pipelines
+
+**Key characteristic**: External data fetching with error handling
+
+### Node Structure
+
+```
+Trigger → HTTP Request → [Transform] → [Action] → [Error Handler]
+```
+
+### Configuration Notes
+
+<Tip>
+  Always use n8n's credentials system for API keys — never hardcode them in parameters. Use environment variables for API base URLs: `={{$env.API_BASE_URL}}/users`
+</Tip>
+
+For large datasets, implement pagination to avoid memory issues:
+
+```
+1. Set (initialize: page=1, has_more=true)
+2. HTTP Request (GET /api/items?page={{$json.page}})
+3. Code (check if more pages)
+4. IF (has_more === true)
+   └→ Set (increment page) → Loop to step 2
+```
+
+### Example Use Cases
+
+<Tabs>
+  <Tab title="Data Fetching">
+    Fetch GitHub issues hourly and store in Postgres:
+    ```
+    1. Schedule (every hour)
+    2. HTTP Request
+       - Method: GET
+       - URL: https://api.github.com/repos/owner/repo/issues
+       - Auth: Bearer Token
+       - Query: state=open
+    3. Code (filter by labels)
+    4. Set (map to database schema)
+    5. Postgres (upsert issues)
+    ```
+  </Tab>
+  <Tab title="API to API">
+    Sync Jira tickets to Slack every 15 minutes:
+    ```
+    1. Schedule (every 15 minutes)
+    2. HTTP Request (GET Jira tickets updated today)
+    3. IF (check if tickets exist)
+    4. Set (format for Slack)
+    5. HTTP Request (POST to Slack webhook)
+    ```
+  </Tab>
+  <Tab title="Monitoring">
+    Check API health every 5 minutes:
+    ```
+    1. Schedule (every 5 minutes)
+    2. HTTP Request (GET /health endpoint)
+    3. IF (status !== 200 OR response_time > 2000ms)
+    4. Slack (alert #ops-team)
+    5. PagerDuty (create incident)
+    ```
+  </Tab>
+</Tabs>
+
+### Template References
+
+From the n8n template library (892 API integration templates):
+- **GitHub to Notion**: `Schedule → HTTP Request (GitHub) → Transform → HTTP Request (Notion)`
+- **Weather to Slack**: `Schedule → HTTP Request (Weather API) → Set (format) → Slack`
+- **CRM Sync**: `Schedule → HTTP Request (CRM A) → Transform → HTTP Request (CRM B)`
+
+---
+
+## Database Operations
+
+**Use when**: Syncing between databases, running database queries on schedule, ETL workflows
+
+**Key characteristic**: Data persistence and synchronization
+
+### Node Structure
+
+```
+Trigger → [Query/Read] → [Transform] → [Write/Update] → [Verify/Log]
+```
+
+### Configuration Notes
+
+<Warning>
+  Always use parameterized queries to prevent SQL injection:
+
+  ```javascript
+  // ✅ SAFE
+  {
+    query: "SELECT * FROM users WHERE email = $1",
+    parameters: ["={{$json.email}}"]
+  }
+
+  // ❌ DANGEROUS
+  {
+    query: "SELECT * FROM users WHERE email = '={{$json.email}}'"
+  }
+  ```
+</Warning>
+
+**Supported databases**: Postgres, MySQL, MongoDB, Microsoft SQL, SQLite, Redis, and more via community nodes.
+
+### Example Use Cases
+
+<Tabs>
+  <Tab title="Data Sync">
+    Sync Postgres to MySQL every 15 minutes:
+    ```
+    1. Schedule (every 15 minutes)
+    2. Postgres (SELECT WHERE updated_at > last_sync)
+    3. IF (check if records exist)
+    4. Set (map Postgres schema to MySQL schema)
+    5. MySQL (INSERT or UPDATE users)
+    6. Postgres (UPDATE sync_log SET last_sync = NOW())
+    7. Slack (notify: "Synced X users")
+    ```
+  </Tab>
+  <Tab title="ETL Pipeline">
+    Consolidate data from multiple sources daily:
+    ```
+    1. Schedule (daily at 2 AM)
+    2. [Parallel branches]
+       ├─ Postgres (SELECT orders)
+       ├─ MySQL (SELECT customers)
+       └─ MongoDB (SELECT products)
+    3. Merge (combine all data)
+    4. Code (transform to warehouse schema)
+    5. Postgres (warehouse INSERT into fact_sales)
+    6. Email (send summary report)
+    ```
+  </Tab>
+  <Tab title="Cleanup">
+    Archive and clean old logs weekly:
+    ```
+    1. Schedule (weekly on Sunday at 2 AM)
+    2. Postgres (find records older than 90 days)
+    3. IF (records exist)
+    4. Code (export to JSON for archive)
+    5. Google Drive (upload archive file)
+    6. Postgres (DELETE archived records)
+    7. Slack (report: "Archived X records")
+    ```
+  </Tab>
+</Tabs>
+
+### Template References
+
+From the n8n template library (456 database templates):
+- **Data Sync**: `Schedule → Postgres (SELECT new records) → Transform → MySQL (INSERT)`
+- **ETL Pipeline**: `Schedule → [Multiple DB reads] → Merge → Transform → Warehouse (INSERT)`
+- **Backup**: `Schedule → Postgres (SELECT all) → JSON → Google Drive (upload)`
+
+---
+
+## AI Agent Workflow
+
+**Use when**: Building conversational AI, creating agents with tool access, or automating multi-step reasoning tasks
+
+**Key characteristic**: AI-powered decision making with tool use
+
+### Node Structure
+
+```
+Trigger → AI Agent (Model + Tools + Memory) → [Process Response] → Output
+```
+
+### Configuration Notes
+
+<Tip>
+  n8n supports **8 AI connection types**. The most critical rule: connect tools via the `ai_tool` port, not the main port.
+
+  ```
+  HTTP Request --[ai_tool]--> AI Agent  ✅
+  HTTP Request -----------> AI Agent    ❌
+  ```
+</Tip>
+
+The 8 AI connection types:
+
+| Connection Type | Purpose |
+|---|---|
+| `ai_languageModel` | The LLM (OpenAI, Anthropic, Google, Ollama) |
+| `ai_tool` | Functions the agent can call |
+| `ai_memory` | Conversation context |
+| `ai_outputParser` | Parse structured outputs |
+| `ai_embedding` | Vector embeddings |
+| `ai_vectorStore` | Vector database |
+| `ai_document` | Document loaders |
+| `ai_textSplitter` | Text chunking |
+
+### Example Use Cases
+
+<Tabs>
+  <Tab title="Customer Support Bot">
+    ```
+    1. Webhook (path: "chat", POST)
+       - Receives: {user_id, message, session_id}
+
+    2. AI Agent
+       ├─ OpenAI Chat Model (gpt-4)
+       ├─ HTTP Request Tool (search knowledge base)
+       ├─ Postgres Tool (query customer orders)
+       └─ Window Buffer Memory (by session_id)
+
+    3. Code (format response)
+    4. Webhook Response (send reply)
+    ```
+  </Tab>
+  <Tab title="SQL Analyst">
+    ```
+    1. Webhook (data question)
+
+    2. AI Agent
+       ├─ OpenAI Chat Model (gpt-4)
+       ├─ Postgres Tool (execute SELECT queries)
+       └─ Code Tool (data analysis)
+
+    3. Code (generate visualization data)
+    4. Webhook Response (answer + chart data)
+    ```
+
+    **Security**: Create a read-only DB user for AI tools:
+    ```sql
+    CREATE USER ai_readonly WITH PASSWORD 'secure';
+    GRANT SELECT ON customers, orders TO ai_readonly;
+    ```
+  </Tab>
+  <Tab title="Document Q&A">
+    Setup phase (run once):
+    ```
+    1. Read Files (load documentation)
+    2. Text Splitter (chunk into paragraphs)
+    3. Embeddings (OpenAI Embeddings)
+    4. Vector Store (store vectors)
+    ```
+
+    Query phase:
+    ```
+    1. Webhook (receive question)
+    2. AI Agent
+       ├─ OpenAI Chat Model (gpt-4)
+       ├─ Vector Store Tool (search similar docs)
+       └─ Buffer Memory (context)
+    3. Webhook Response (answer with citations)
+    ```
+  </Tab>
+</Tabs>
+
+### Template References
+
+From the n8n template library (234 AI templates):
+- **Simple Chatbot**: `Webhook → AI Agent (GPT-4 + Memory) → Webhook Response`
+- **Document Q&A**: `Setup: Files → Embed → Vector Store / Query: Webhook → AI Agent → Response`
+- **SQL Analyst**: `Webhook → AI Agent (GPT-4 + Postgres Tool) → Format → Response`
+
+---
+
+## Scheduled Tasks
+
+**Use when**: Recurring reports or summaries, periodic data fetching, maintenance tasks
+
+**Key characteristic**: Time-based automated execution
+
+### Node Structure
+
+```
+Schedule Trigger → [Fetch Data] → [Process] → [Deliver] → [Log/Notify]
+```
+
+### Configuration Notes
+
+<Warning>
+  Always set an explicit timezone in the workflow settings. Without it, the schedule runs in the server's local time, which may shift with daylight saving transitions.
+
+  ```javascript
+  // Workflow settings
+  { timezone: "America/New_York" }
+  ```
+</Warning>
+
+The Schedule node supports three modes:
+
+| Mode | Best For | Example |
+|---|---|---|
+| **Interval** | Simple recurring tasks | Every 15 minutes |
+| **Days & Hours** | Specific days and times | Weekdays at 9 AM |
+| **Cron** | Complex schedules | `0 9,17 * * 1-5` |
+
+**Common cron expressions**:
+```
+0 9 * * 1-5      Every weekday at 9 AM
+0 0 1 * *        First day of every month
+*/15 9-17 * * *  Every 15 min during business hours
+0 */6 * * *      Every 6 hours
+```
+
+### Example Use Cases
+
+<Tabs>
+  <Tab title="Daily Reports">
+    Sales report at 9 AM every day:
+    ```
+    1. Schedule (daily at 9 AM)
+    2. Postgres (query yesterday's sales)
+       SELECT date, SUM(amount) as total, COUNT(*) as orders
+       FROM orders
+       WHERE date = CURRENT_DATE - INTERVAL '1 day'
+    3. Code (calculate metrics: total, avg order value, comparison)
+    4. Set (format email body)
+    5. Email (send to team@company.com)
+    6. Slack (post summary to #sales)
+    ```
+  </Tab>
+  <Tab title="Monitoring">
+    Website uptime check every 5 minutes:
+    ```
+    1. Schedule (every 5 minutes)
+    2. HTTP Request (GET /health, timeout: 10s, continueOnFail)
+    3. IF (status !== 200 OR response_time > 2000ms)
+    4. Redis (check alert cooldown)
+    5. IF (no recent alert)
+    6. Slack (notify #ops-team)
+    7. PagerDuty (create incident)
+    8. Postgres (log uptime check result)
+    ```
+  </Tab>
+  <Tab title="Backup">
+    Database backup nightly at 2 AM:
+    ```
+    1. Schedule (daily at 2 AM)
+    2. Code (execute pg_dump)
+    3. Code (compress backup)
+    4. AWS S3 (upload compressed backup)
+    5. AWS S3 (list old backups, keep last 30 days)
+    6. AWS S3 (delete old backups)
+    7. IF (error occurred)
+       ├─ PagerDuty (critical alert)
+       └─ Email (backup failed!)
+       ELSE → Slack (#devops: "✅ Backup completed")
+    ```
+  </Tab>
+</Tabs>
+
+### Template References
+
+From the n8n template library:
+- **Template #2947 (Weather to Slack)**: `Schedule (daily 8 AM) → HTTP Request (weather API) → Set (format) → Slack`
+- **Daily backup**: `Schedule (nightly 2 AM) → Postgres (export) → Google Drive (upload) → Email (confirmation)`
+- **Monitoring**: `Schedule (every 5 min) → HTTP Request (health check) → IF (down) → PagerDuty alert`
+
+---
+
+## Workflow Creation Checklist
+
+Apply this checklist to every workflow regardless of pattern:
+
+<Steps>
+  <Step title="Planning Phase">
+    - Identify the pattern (webhook, API, database, AI, scheduled)
+    - List required nodes using `search_nodes`
+    - Understand the data flow (input → transform → output)
+    - Plan the error handling strategy
+
+  </Step>
+  <Step title="Implementation Phase">
+    - Create the workflow with the appropriate trigger
+    - Add data source nodes
+    - Configure authentication and credentials
+    - Add transformation nodes (Set, Code, IF)
+    - Add output and action nodes
+    - Configure error handling
+
+  </Step>
+  <Step title="Validation Phase">
+    - Validate each node configuration with `validate_node`
+    - Validate the complete workflow with `validate_workflow`
+    - Test with sample data
+    - Handle edge cases (empty data, errors)
+
+  </Step>
+  <Step title="Deployment Phase">
+    - Review workflow settings (execution order, timeout, error handling)
+    - Activate the workflow using the `activateWorkflow` operation
+    - Monitor the first few executions
+    - Document the workflow purpose and data flow
+
+  </Step>
+</Steps>
+
+---
+
+## Pattern Statistics
+
+Based on analysis of real n8n workflow usage:
+
+**Most common triggers**:
+1. Webhook — 35%
+2. Schedule (periodic tasks) — 28%
+3. Manual (testing/admin) — 22%
+4. Service triggers (Slack, email, etc.) — 15%
+
+**Most common transformations**:
+1. Set (field mapping) — 68%
+2. Code (custom logic) — 42%
+3. IF (conditional routing) — 38%
+4. Switch (multi-condition) — 18%
+
+**Average workflow complexity**:
+- Simple (3–5 nodes): 42%
+- Medium (6–10 nodes): 38%
+- Complex (11+ nodes): 20%
+
+<Tip>
+  Start with the simplest pattern that solves your problem. Most workflows fall in the 3–5 node range.
+</Tip>
+
+---
+
+## Common Data Flow Shapes
+
+```
+Linear Flow
+  Trigger → Transform → Action → End
+  Use when: Simple workflows with a single path
+
+Branching Flow
+  Trigger → IF → [True Path]
+               └→ [False Path]
+  Use when: Different actions based on conditions
+
+Parallel Processing
+  Trigger → [Branch 1] → Merge
+         └→ [Branch 2] ↗
+  Use when: Independent operations that can run simultaneously
+
+Loop Pattern
+  Trigger → Split in Batches → Process → Loop (until done)
+  Use when: Processing large datasets in chunks
+```
+
+---
+
+## Getting Help
+
+- **Issues**: [github.com/czlonkowski/n8n-skills/issues](https://github.com/czlonkowski/n8n-skills/issues)
+- **Discussions**: [github.com/czlonkowski/n8n-skills/discussions](https://github.com/czlonkowski/n8n-skills/discussions)

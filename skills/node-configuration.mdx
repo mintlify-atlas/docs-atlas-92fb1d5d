@@ -1,0 +1,452 @@
+---
+title: "Node Configuration"
+description: "Operation-aware node configuration guidance: property dependencies, displayOptions rules, get_node detail levels, and common configuration patterns."
+---
+
+# Node Configuration
+
+Expert guidance for operation-aware node configuration with property dependencies.
+
+<Tip>
+**Progressive disclosure principle:** Start minimal, add complexity as needed. Use `get_node({detail: "standard"})` first — it covers 95% of configuration needs with a ~1–2K token response. Only escalate to `detail: "full"` when standard detail is insufficient.
+</Tip>
+
+## Core Concept: Operation-Aware Configuration
+
+Not all fields are always required. **Which fields are required depends on the operation selected.**
+
+```javascript
+// Slack: operation = "post" requires channel + text
+{
+  resource: "message",
+  operation: "post",
+  channel: "#general",   // Required for post
+  text: "Hello!"         // Required for post
+}
+
+// Slack: operation = "update" requires messageId, NOT channel
+{
+  resource: "message",
+  operation: "update",
+  messageId: "123",      // Required for update (different!)
+  text: "Updated!"
+  // channel NOT required for update
+}
+
+// Slack: operation = "create" (channel) requires name, NOT text
+{
+  resource: "channel",
+  operation: "create",
+  name: "new-channel",   // Required for channel create
+  isPrivate: false
+  // text NOT required at all for this operation
+}
+```
+
+**Key insight:** Always re-check `get_node` when changing the resource or operation. Fields change.
+
+## Property Dependencies (displayOptions)
+
+Fields appear and disappear based on the values of other fields. This is controlled by `displayOptions` rules.
+
+```javascript
+// Example: body field in HTTP Request
+{
+  name: "body",
+  displayOptions: {
+    show: {
+      sendBody: [true],
+      method: ["POST", "PUT", "PATCH"]
+    }
+  }
+}
+// Translation: "body" only appears when sendBody=true AND method is POST/PUT/PATCH
+```
+
+### Common Dependency Chains
+
+<AccordionGroup>
+  <Accordion title="HTTP Request: POST with JSON body">
+```javascript
+// Full dependency chain:
+// method="POST" → sendBody available
+// sendBody=true → body required
+// body.contentType="json" → body.content expected as JSON
+
+{
+  method: "POST",
+  url: "https://api.example.com/create",
+  sendBody: true,
+  body: {
+    contentType: "json",
+    content: {
+      name: "={{$json.body.name}}",
+      email: "={{$json.body.email}}"
+    }
+  }
+}
+```
+  </Accordion>
+  <Accordion title="HTTP Request: GET with query params">
+```javascript
+// sendQuery=true → queryParameters required
+
+{
+  method: "GET",
+  url: "https://api.example.com/users",
+  authentication: "predefinedCredentialType",
+  nodeCredentialType: "httpHeaderAuth",
+  sendQuery: true,
+  queryParameters: {
+    parameters: [
+      {name: "limit", value: "100"},
+      {name: "offset", value: "0"}
+    ]
+  }
+}
+```
+  </Accordion>
+  <Accordion title="IF Node: string comparison (binary)">
+```javascript
+// Binary operator (equals, contains, etc.) → needs value1 + value2
+// Auto-sanitization removes singleValue from binary operators
+
+{
+  conditions: {
+    string: [
+      {
+        value1: "={{$json.status}}",
+        operation: "equals",
+        value2: "active"    // Binary: needs both value1 AND value2
+      }
+    ]
+  }
+}
+```
+  </Accordion>
+  <Accordion title="IF Node: empty check (unary)">
+```javascript
+// Unary operator (isEmpty, isNotEmpty) → needs only value1
+// Auto-sanitization adds singleValue: true automatically
+
+{
+  conditions: {
+    string: [
+      {
+        value1: "={{$json.email}}",
+        operation: "isEmpty"
+        // singleValue: true  ← added automatically by auto-sanitization
+        // No value2 — unary operator checks single value
+      }
+    ]
+  }
+}
+```
+  </Accordion>
+  <Accordion title="Postgres: different operations">
+```javascript
+// executeQuery → query required
+{
+  operation: "executeQuery",
+  query: "SELECT * FROM users WHERE id = $1",
+  additionalFields: {queryParams: "={{$json.userId}}"}
+}
+
+// insert → table + columns required
+{
+  operation: "insert",
+  table: "users",
+  columns: "id,name,email"
+}
+
+// update → table + updateKey required
+{
+  operation: "update",
+  table: "users",
+  updateKey: "id"
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## `get_node` Detail Level Decision Tree
+
+```text
+Starting a new node configuration?
+  └→ get_node({detail: "standard"})          ← Always start here
+        |
+        Does standard detail have what you need?
+        ├ YES → Configure with it
+        └ NO  → Looking for a specific field name?
+                  ├ YES → get_node({mode: "search_properties", propertyQuery: "auth"})
+                  └ NO  → get_node({detail: "full"})           ← Last resort only
+```
+
+| Detail Level | Tokens | Use When |
+|-------------|--------|----------|
+| `minimal` | ~200 | Quick metadata only |
+| `standard` | ~1–2K | **Default — covers 95% of needs** |
+| `full` | ~3–8K | Complex debugging; complete schema |
+
+## Configuration Workflow
+
+<Steps>
+  <Step title="Identify node type and operation">
+    What service are you integrating? What action do you want to perform?
+
+    ```javascript
+    // Goal: Post a message to Slack
+    // Node: nodes-base.slack
+    // Resource: message
+    // Operation: post
+    ```
+  </Step>
+  <Step title="Get node info (standard detail)">
+    ```javascript
+    get_node({
+      nodeType: "nodes-base.slack",
+      includeExamples: true  // Get real template configs
+    })
+    // Returns: operations, required fields, example configurations
+    ```
+  </Step>
+  <Step title="Build minimal configuration">
+    Start with only the required fields:
+
+    ```javascript
+    {
+      resource: "message",
+      operation: "post",
+      channel: "#general",
+      text: "Hello!"
+    }
+    ```
+  </Step>
+  <Step title="Validate">
+    ```javascript
+    validate_node({
+      nodeType: "nodes-base.slack",
+      config,
+      profile: "runtime"
+    })
+    // Follow validation loop: fix errors, validate again (2–3 cycles is normal)
+    ```
+  </Step>
+  <Step title="Search for specific properties if stuck">
+    ```javascript
+    get_node({
+      nodeType: "nodes-base.httpRequest",
+      mode: "search_properties",
+      propertyQuery: "auth"  // Finds authentication-related properties
+    })
+    ```
+  </Step>
+  <Step title="Add optional fields and validate again">
+    Only add fields you actually need. Avoid over-configuring upfront.
+  </Step>
+</Steps>
+
+## AI Connection Types
+
+When building AI workflows, connections use special `sourceOutput` types:
+
+| Connection Type | `sourceOutput` Value | Example Node |
+|----------------|---------------------|-------------|
+| Language Model | `ai_languageModel` | OpenAI Chat Model |
+| Tool | `ai_tool` | HTTP Request Tool, Code Tool |
+| Memory | `ai_memory` | Window Buffer Memory |
+| Output Parser | `ai_outputParser` | Structured Output Parser |
+| Embedding | `ai_embedding` | OpenAI Embeddings |
+| Vector Store | `ai_vectorStore` | Pinecone, Qdrant |
+| Document | `ai_document` | Default Data Loader |
+| Text Splitter | `ai_textSplitter` | Recursive Character Splitter |
+
+```javascript
+// Connect a language model to the AI Agent
+{
+  type: "addConnection",
+  source: "OpenAI Chat Model",
+  target: "AI Agent",
+  sourceOutput: "ai_languageModel"
+}
+
+// Connect multiple tools
+{
+  type: "addConnection",
+  source: "HTTP Request Tool",
+  target: "AI Agent",
+  sourceOutput: "ai_tool"
+}
+```
+
+## Common Node Configuration Patterns
+
+<Tabs>
+  <Tab title="Resource/Operation Nodes">
+**Examples:** Slack, Google Sheets, Airtable, Notion
+
+Structure: `resource` + `operation` determines all required fields.
+
+```javascript
+// Pattern
+{
+  resource: "<entity>",    // What thing (message, channel, row...)
+  operation: "<action>",   // What to do (post, create, update...)
+  // ... operation-specific fields
+}
+
+// Always re-check get_node when changing resource or operation!
+```
+  </Tab>
+  <Tab title="HTTP-Based Nodes">
+**Examples:** HTTP Request, Webhook
+
+```javascript
+// GET request — no body
+{
+  method: "GET",
+  url: "https://api.example.com/users",
+  authentication: "predefinedCredentialType",
+  nodeCredentialType: "httpHeaderAuth"
+}
+
+// POST with JSON body
+{
+  method: "POST",
+  url: "https://api.example.com/create",
+  authentication: "none",
+  sendBody: true,         // Required to enable body!
+  body: {
+    contentType: "json",
+    content: {name: "John", email: "john@example.com"}
+  }
+}
+```
+  </Tab>
+  <Tab title="Database Nodes">
+**Examples:** Postgres, MySQL, MongoDB
+
+```javascript
+// Query
+{
+  operation: "executeQuery",
+  query: "SELECT * FROM users WHERE status = 'active' LIMIT 100"
+}
+
+// Insert
+{
+  operation: "insert",
+  table: "users",
+  columns: "name,email,created_at"
+}
+
+// Update with upsert
+{
+  operation: "upsert",
+  table: "users",
+  conflictColumns: "email",
+  updateColumns: "name,updated_at"
+}
+```
+  </Tab>
+  <Tab title="Conditional Logic Nodes">
+**Examples:** IF, Switch
+
+```javascript
+// IF node: string comparison
+{
+  conditions: {
+    string: [
+      {
+        value1: "={{$json.status}}",
+        operation: "equals",
+        value2: "active"
+      }
+    ]
+  }
+}
+
+// IF node: number comparison
+{
+  conditions: {
+    number: [
+      {
+        value1: "={{$json.score}}",
+        operation: "greaterThan",
+        value2: 50
+      }
+    ]
+  }
+}
+```
+
+<Note>
+Don't manually add or remove `singleValue` — auto-sanitization handles this correctly on every save.
+</Note>
+  </Tab>
+</Tabs>
+
+## Configuration Anti-Patterns
+
+<CardGroup cols={2}>
+  <Card title="Over-configuring upfront" icon="xmark">
+```javascript
+// ❌ Don't add every optional field
+{
+  method: "GET",
+  url: "...",
+  sendQuery: false,
+  sendHeaders: false,
+  sendBody: false,
+  timeout: 10000,
+  // ... 20 more optional fields
+}
+```
+  </Card>
+  <Card title="Start minimal instead" icon="check">
+```javascript
+// ✅ Start with only required fields
+{
+  method: "GET",
+  url: "...",
+  authentication: "none"
+}
+// Add more only when validation asks for it
+```
+  </Card>
+  <Card title="Copy configs without checking" icon="xmark">
+```javascript
+// ❌ Copy Slack post config for update
+{
+  resource: "message",
+  operation: "update",  // Changed
+  channel: "#general",  // Wrong field for update!
+  text: "Updated"
+}
+```
+  </Card>
+  <Card title="Check requirements when switching" icon="check">
+```javascript
+// ✅ Check get_node after changing operation
+get_node({nodeType: "nodes-base.slack"})
+// See that update needs messageId, not channel
+{
+  resource: "message",
+  operation: "update",
+  messageId: "12345678",  // Correct!
+  text: "Updated"
+}
+```
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+| Practice | Why |
+|----------|-----|
+| Start with `get_node({detail: "standard"})` | Covers 95% of needs at 1–2K tokens |
+| Validate iteratively (2–3 cycles is normal) | Validation reveals missing dependencies |
+| Use `search_properties` mode when stuck | Finds fields by name efficiently |
+| Respect operation context | Different operations ← different requirements |
+| Trust auto-sanitization | Don't manually manage `singleValue` |
+| Never jump straight to `detail: "full"` | Try standard and search_properties first |

@@ -1,0 +1,537 @@
+---
+title: "Validation Expert"
+description: "Interpret and fix n8n validation errors. Covers validation loop, profiles, error catalog, auto-sanitization, and false positives."
+---
+
+# Validation Expert
+
+Expert guide for interpreting and fixing n8n validation errors.
+
+<Tip>
+**Validate early, validate often.** Validation is iterative — expect 2–3 validate → fix cycles. The average is 23 seconds thinking about errors and 58 seconds fixing them per cycle.
+</Tip>
+
+## The Validation Loop
+
+From real telemetry: **7,841 occurrences** of this exact pattern:
+
+```text
+1. Configure node
+   ↓
+2. validate_node  (23s thinking about errors)
+   ↓
+3. Read error messages carefully
+   ↓
+4. Fix errors
+   ↓
+5. validate_node again  (58s fixing)
+   ↓
+6. Repeat until valid  (usually 2–3 iterations)
+```
+
+### Example Loop
+
+```javascript
+// Iteration 1
+let config = {
+  resource: "channel",
+  operation: "create"
+};
+
+const result1 = validate_node({
+  nodeType: "nodes-base.slack",
+  config,
+  profile: "runtime"
+});
+// → Error: Missing "name"
+
+// ⏱ 23 seconds thinking...
+
+// Iteration 2
+config.name = "general";
+
+const result2 = validate_node({
+  nodeType: "nodes-base.slack",
+  config,
+  profile: "runtime"
+});
+// → Error: Missing "text"
+
+// ⏱ 58 seconds fixing...
+
+// Iteration 3
+config.text = "Hello!";
+
+const result3 = validate_node({
+  nodeType: "nodes-base.slack",
+  config,
+  profile: "runtime"
+});
+// → Valid! ✅
+```
+
+<Note>
+Multiple validation iterations are **completely normal**. Don't try to fix all errors at once — address them one at a time.
+</Note>
+
+## Validation Profiles
+
+Choose the right profile for your development stage:
+
+<Tabs>
+  <Tab title="minimal">
+**Use when:** Quick checks during active editing
+
+**Validates:** Required fields only, basic structure
+
+**Pros:** Fastest, most permissive
+
+**Cons:** May miss real issues
+
+```javascript
+validate_node({
+  nodeType: "nodes-base.slack",
+  config: {},
+  mode: "minimal"
+})
+// Returns: missingRequiredFields array
+```
+  </Tab>
+  <Tab title="runtime (recommended)">
+**Use when:** Pre-deployment validation
+
+**Validates:** Required fields, value types, allowed values, basic dependencies
+
+**Pros:** Balanced — catches real errors without excessive noise
+
+**Cons:** Some edge cases missed
+
+```javascript
+validate_node({
+  nodeType: "nodes-base.slack",
+  config: {resource: "message", operation: "post", channel: "#general", text: "Hello!"},
+  profile: "runtime"
+})
+```
+  </Tab>
+  <Tab title="ai-friendly">
+**Use when:** AI-generated node configurations
+
+**Validates:** Same as runtime but reduces false positives
+
+**Pros:** Less noisy for AI workflows
+
+```javascript
+validate_node({
+  nodeType: "nodes-base.slack",
+  config: {...},
+  profile: "ai-friendly"
+})
+```
+  </Tab>
+  <Tab title="strict">
+**Use when:** Final check before critical production deployment
+
+**Validates:** Everything — best practices, performance, security
+
+**Pros:** Maximum safety
+
+**Cons:** Many warnings; some false positives; not recommended during development
+
+```javascript
+validate_node({
+  nodeType: "nodes-base.slack",
+  config: {...},
+  profile: "strict"
+})
+```
+  </Tab>
+</Tabs>
+
+## Validation Result Structure
+
+```javascript
+{
+  "valid": false,
+  "errors": [
+    {
+      "type": "missing_required",
+      "property": "channel",
+      "message": "Channel name is required",
+      "fix": "Provide a channel name (lowercase, no spaces, 1-80 characters)"
+    }
+  ],
+  "warnings": [
+    {
+      "type": "best_practice",
+      "property": "errorHandling",
+      "message": "Slack API can have rate limits",
+      "suggestion": "Add onError: 'continueRegularOutput' with retryOnFail"
+    }
+  ],
+  "suggestions": [
+    {
+      "type": "optimization",
+      "message": "Consider using batch operations for multiple messages"
+    }
+  ],
+  "summary": {
+    "hasErrors": true,
+    "errorCount": 1,
+    "warningCount": 1,
+    "suggestionCount": 1
+  }
+}
+```
+
+### Error Severity Levels
+
+| Severity | Blocks Execution? | Action Required |
+|----------|------------------|----------------|
+| **Error** | Yes — must fix before activation | Fix immediately |
+| **Warning** | No — workflow can run but may have issues | Fix for production |
+| **Suggestion** | No — optional improvement | Fix if convenient |
+
+## Common Error Catalog
+
+<AccordionGroup>
+  <Accordion title="missing_required — Required field not provided">
+**What it means:** A field that is required for the selected operation is absent.
+
+**How to fix:**
+1. Use `get_node` to see what fields the operation requires
+2. Add the missing field with an appropriate value
+
+```javascript
+// Error
+{
+  "type": "missing_required",
+  "property": "channel",
+  "message": "Channel name is required",
+  "fix": "Provide a channel name"
+}
+
+// Fix
+config.channel = "#general";
+```
+  </Accordion>
+  <Accordion title="invalid_value — Value not in allowed options">
+**What it means:** The value provided doesn't match the list of allowed options.
+
+**How to fix:**
+1. Read the error message for the allowed values list
+2. Use `get_node` to see all options
+
+```javascript
+// Error
+{
+  "type": "invalid_value",
+  "property": "operation",
+  "message": "Operation must be one of: post, update, delete",
+  "current": "send"
+}
+
+// Fix
+config.operation = "post";  // Use a valid operation
+```
+  </Accordion>
+  <Accordion title="type_mismatch — Wrong data type">
+**What it means:** The value is the right field but the wrong type (e.g., string instead of number).
+
+```javascript
+// Error
+{
+  "type": "type_mismatch",
+  "property": "limit",
+  "message": "Expected number, got string",
+  "current": "100"
+}
+
+// Fix
+config.limit = 100;  // Number, not string
+```
+  </Accordion>
+  <Accordion title="invalid_expression — Expression syntax error">
+**What it means:** An expression field has invalid `{{}}` syntax.
+
+```javascript
+// Error
+{
+  "type": "invalid_expression",
+  "property": "text",
+  "message": "Invalid expression: $json.name",
+  "current": "$json.name"
+}
+
+// Fix — add {{}} wrapper
+config.text = "={{$json.name}}";
+```
+
+See the [Expression Syntax](/skills/expression-syntax) skill for the full expression guide.
+  </Accordion>
+  <Accordion title="invalid_reference — Referenced node doesn't exist">
+**What it means:** An expression references a node that doesn't exist in the workflow.
+
+```javascript
+// Error
+{
+  "type": "invalid_reference",
+  "property": "expression",
+  "message": "Node 'HTTP Requets' does not exist",
+  "current": "={{$node['HTTP Requets'].json.data}}"
+}
+
+// Fix — correct the typo
+config.expression = "={{$node['HTTP Request'].json.data}}";
+```
+  </Accordion>
+</AccordionGroup>
+
+## Auto-Sanitization System
+
+Auto-sanitization runs automatically on **ALL nodes** during **ANY workflow update** (create or update_partial).
+
+### What It Fixes Automatically
+
+<Tabs>
+  <Tab title="Binary Operators">
+Operators that compare two values: `equals`, `notEquals`, `contains`, `notContains`, `greaterThan`, `lessThan`, `startsWith`, `endsWith`
+
+**Fix:** Removes `singleValue` property (binary operators should not have it)
+
+```javascript
+// Before (wrong)
+{
+  "type": "boolean",
+  "operation": "equals",
+  "singleValue": true   // ❌ Binary operators don't need this
+}
+
+// After (auto-fixed)
+{
+  "type": "boolean",
+  "operation": "equals"
+  // singleValue removed ✅
+}
+```
+  </Tab>
+  <Tab title="Unary Operators">
+Operators that check a single value: `isEmpty`, `isNotEmpty`, `true`, `false`
+
+**Fix:** Adds `singleValue: true` (unary operators require it)
+
+```javascript
+// Before (wrong)
+{
+  "type": "boolean",
+  "operation": "isEmpty"
+  // Missing singleValue ❌
+}
+
+// After (auto-fixed)
+{
+  "type": "boolean",
+  "operation": "isEmpty",
+  "singleValue": true   // ✅ Added automatically
+}
+```
+  </Tab>
+  <Tab title="IF / Switch Metadata">
+**Fix:** Adds complete `conditions.options` metadata for:
+- IF node v2.2+
+- Switch node v3.2+
+
+This happens automatically on save — no manual intervention needed.
+  </Tab>
+</Tabs>
+
+### What Auto-Sanitization Cannot Fix
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Broken connections | References to deleted nodes | Use `cleanStaleConnections` operation |
+| Branch count mismatches | 3 Switch rules but only 2 connections | Add missing connections or remove rules |
+| Paradoxical corrupt states | API returns corrupt, rejects updates | May require manual database intervention |
+
+### Auto-Fix Tool
+
+For bulk fixes beyond auto-sanitization:
+
+```javascript
+// Preview fixes first (default: doesn't apply)
+n8n_autofix_workflow({
+  id: "workflow-id",
+  applyFixes: false,
+  confidenceThreshold: "medium"  // high, medium, low
+})
+
+// Apply fixes after review
+n8n_autofix_workflow({
+  id: "workflow-id",
+  applyFixes: true
+})
+```
+
+**Fix types the auto-fix tool handles:**
+- `expression-format` — Fix expression syntax
+- `typeversion-correction` — Correct typeVersion
+- `error-output-config` — Fix error output settings
+- `webhook-missing-path` — Add missing webhook paths
+- `typeversion-upgrade` — Upgrade to latest version
+- `version-migration` — Apply version migrations
+
+## False Positives Guide
+
+Some validation warnings are technically "wrong" but acceptable in context.
+
+<AccordionGroup>
+  <Accordion title="Missing error handling">
+**When it's a false positive:** Simple workflows where failures are obvious, testing or development workflows, and non-critical notification workflows.
+
+**When you should fix it:** Production workflows handling important data or payments.
+  </Accordion>
+  <Accordion title="No retry logic">
+**When it's a false positive:** APIs with their own built-in retry logic, idempotent operations where double-execution is harmless, and manual trigger workflows run by a human.
+
+**When you should fix it:** Flaky external services in production automation.
+  </Accordion>
+  <Accordion title="Missing rate limiting">
+**When it's a false positive:** Internal APIs with no rate limits, low-volume workflows (few executions per day), and APIs that enforce rate limiting server-side.
+
+**When you should fix it:** Public APIs with strict rate limits and high-volume automated workflows.
+  </Accordion>
+  <Accordion title="Unbounded query">
+**When it's a false positive:** Small, known-size datasets, aggregation queries (COUNT, SUM) that scan the full table by design, and development/testing environments.
+
+**When you should fix it:** Production queries on large tables.
+  </Accordion>
+</AccordionGroup>
+
+**To reduce false positives in AI-generated configurations:**
+
+```javascript
+validate_node({
+  nodeType: "nodes-base.slack",
+  config: {...},
+  profile: "ai-friendly"  // Fewer false positives
+})
+```
+
+## Workflow Validation
+
+```javascript
+// Validate the full workflow structure
+validate_workflow({
+  workflow: {
+    nodes: [...],
+    connections: {...}
+  },
+  options: {
+    validateNodes: true,
+    validateConnections: true,
+    validateExpressions: true,
+    profile: "runtime"
+  }
+})
+
+// Validate by workflow ID (requires n8n API)
+n8n_validate_workflow({
+  id: "workflow-id",
+  options: {profile: "runtime"}
+})
+```
+
+### Common Workflow-Level Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Connection from 'X' to 'Y' - target node not found` | Stale connection to a deleted node | Use `cleanStaleConnections` operation |
+| `Circular dependency detected: A → B → A` | Loop in workflow | Restructure to remove the cycle |
+| `Multiple trigger nodes found` | More than one trigger | Remove extra triggers or split into separate workflows |
+| `Node 'X' is not connected to workflow flow` | Orphaned node | Connect it or delete it |
+
+## Recovery Strategies
+
+<Tabs>
+  <Tab title="Start Fresh">
+**When:** Configuration is severely broken or corrupted.
+
+```javascript
+// 1. Get required fields
+get_node({nodeType: "nodes-base.slack", mode: "minimal"})
+
+// 2. Create minimal valid config
+const config = {resource: "message", operation: "post", channel: "#general", text: "Hi"};
+
+// 3. Validate
+validate_node({nodeType: "nodes-base.slack", config, profile: "runtime"})
+
+// 4. Add features incrementally, validating after each addition
+```
+  </Tab>
+  <Tab title="Clean Stale Connections">
+**When:** Seeing "Node not found" or broken connection errors.
+
+```javascript
+n8n_update_partial_workflow({
+  id: "workflow-id",
+  intent: "Clean up stale connections after node deletions",
+  operations: [{type: "cleanStaleConnections"}]
+})
+```
+  </Tab>
+  <Tab title="Auto-Fix">
+**When:** Operator structure errors (isEmpty missing singleValue, etc.).
+
+```javascript
+// Preview first
+n8n_autofix_workflow({id: "workflow-id", applyFixes: false})
+
+// Apply after review
+n8n_autofix_workflow({id: "workflow-id", applyFixes: true})
+```
+  </Tab>
+  <Tab title="Binary Search">
+**When:** Workflow validates but executes incorrectly and you can't pinpoint the cause.
+
+1. Remove half the nodes
+2. Validate and test
+3. If it works: the problem is in the removed nodes
+4. If it fails: the problem is in the remaining nodes
+5. Repeat until the problem is isolated
+
+  </Tab>
+</Tabs>
+
+## Profile Selection by Stage
+
+| Development Stage | Recommended Profile |
+|-------------------|--------------------|
+| Initial editing / exploration | `minimal` |
+| Active development | `runtime` |
+| AI-generated configs | `ai-friendly` |
+| Pre-deployment check | `runtime` |
+| Critical production deployment | `strict` |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Do" icon="check">
+    - Validate after every significant change
+    - Read error messages completely before fixing
+    - Fix errors one at a time iteratively
+    - Check the `valid` field — don't assume it passed
+    - Trust auto-sanitization for operator issues
+    - Use `get_node` when the required fields aren't obvious
+
+  </Card>
+  <Card title="Don't" icon="xmark">
+    - Skip validation before activation
+    - Try to fix all errors simultaneously
+    - Use `strict` profile during development
+    - Manually fix auto-sanitization issues
+    - Deploy with unresolved `error` severity issues
+    - Ignore all warnings (some are genuinely important)
+
+  </Card>
+</CardGroup>

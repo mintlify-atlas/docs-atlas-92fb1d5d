@@ -1,0 +1,500 @@
+---
+title: "Workflow Patterns"
+description: "5 proven n8n workflow architectural patterns: webhook processing, HTTP API integration, database operations, AI agents, and scheduled tasks."
+---
+
+# Workflow Patterns
+
+Proven architectural patterns for building n8n workflows, based on analysis of real workflow usage.
+
+## Pattern Selection Guide
+
+| Pattern | Use When | Example |
+|---------|----------|---------|
+| Webhook Processing | Receiving events from external systems | Stripe payment → DB → confirmation email |
+| HTTP API Integration | Fetching data from REST APIs | GitHub issues → Jira tickets |
+| Database Operations | Syncing, querying, ETL workflows | Postgres → transform → MySQL |
+| AI Agent Workflow | Conversational AI, multi-step reasoning | Chat AI with tool access |
+| Scheduled Tasks | Recurring reports, maintenance | Daily analytics → email report |
+
+## Pattern Statistics
+
+**Most common triggers:** Webhook (35%), Schedule (28%), Manual (22%), Service triggers (15%)
+
+**Most common transformations:** Set/field mapping (68%), Code/custom logic (42%), IF/conditional (38%), Switch (18%)
+
+**Most common outputs:** HTTP Request (45%), Slack (32%), Database writes (28%), Email (24%)
+
+---
+
+## Pattern 1: Webhook Processing
+
+**Most common pattern — 35% of all workflows**
+
+### Structure
+
+```text
+Webhook → Validate → Transform → Respond/Notify
+```
+
+### Node List
+
+1. **Webhook** — HTTP endpoint (instant trigger)
+2. **IF / Switch** — Validate incoming data
+3. **Set** — Map/transform fields
+4. **Action node** — Slack, Email, HTTP Request, Database
+5. **Respond to Webhook** — Send HTTP response back to caller
+
+### Use Cases
+
+- Form submissions (contact forms, sign-ups)
+- Payment webhooks (Stripe, PayPal)
+- Git webhooks (GitHub, GitLab push events)
+- Slack slash commands
+- Chat integrations
+
+### Quick Start Example
+
+```text
+1. Webhook (path: "form-submit", method: POST)
+2. Set (map form fields from $json.body.*)
+3. Slack (post to #notifications)
+4. Respond to Webhook (return 200 OK)
+```
+
+<Warning>
+**Webhook data is nested under `.body`.**
+
+Always access webhook payload fields as `{{$json.body.fieldName}}`, not `{{$json.fieldName}}`.
+
+```javascript
+// Webhook receives: {"name": "John", "email": "john@example.com"}
+
+// $json structure from Webhook node:
+{
+  "headers": {...},
+  "params": {},
+  "query": {},
+  "body": {
+    "name": "John",
+    "email": "john@example.com"
+  }
+}
+
+// Correct access:
+{{$json.body.name}}    // ✅
+{{$json.name}}         // ❌ undefined
+```
+</Warning>
+
+### Template Reference
+
+The n8n template library has hundreds of webhook processing examples. Search with:
+```javascript
+search_templates({searchMode: "by_task", task: "webhook_processing"})
+```
+
+---
+
+## Pattern 2: HTTP API Integration
+
+### Structure
+
+```text
+Trigger → HTTP Request → Transform → Action → Error Handler
+```
+
+### Node List
+
+1. **Trigger** — Manual, Schedule, or Webhook
+2. **HTTP Request** — Fetch from REST API
+3. **Split In Batches** — Handle large result sets
+4. **Set / Code** — Transform API response
+5. **Action node** — Database write, Slack notification, etc.
+6. **Error Trigger** — Catch and handle failures
+
+### Use Cases
+
+- Data fetching and synchronization with third-party services
+- Building data pipelines between systems
+- Multi-step API orchestration
+- Converting between service formats (e.g., GitHub → Jira)
+
+### Quick Start Example
+
+```text
+1. Manual Trigger (for testing)
+2. HTTP Request (GET /api/users)
+3. Split In Batches (process 100 at a time)
+4. Set (transform user data fields)
+5. Postgres (upsert users)
+6. Loop (back to step 3 until done)
+```
+
+### Key Configuration Notes
+
+```javascript
+// HTTP Request with authentication
+{
+  method: "GET",
+  url: "https://api.example.com/users",
+  authentication: "predefinedCredentialType",
+  nodeCredentialType: "httpHeaderAuth",
+  sendQuery: true,
+  queryParameters: {
+    parameters: [{name: "limit", value: "100"}]
+  }
+}
+
+// HTTP Request with POST body
+{
+  method: "POST",
+  url: "https://api.example.com/create",
+  sendBody: true,          // Required for POST!
+  body: {
+    contentType: "json",
+    content: {
+      name: "={{$json.body.name}}",
+      email: "={{$json.body.email}}"
+    }
+  }
+}
+```
+
+### Template Reference
+
+```javascript
+search_templates({searchMode: "by_nodes", nodeTypes: ["n8n-nodes-base.httpRequest"]})
+```
+
+---
+
+## Pattern 3: Database Operations
+
+### Structure
+
+```text
+Schedule → Query → Transform → Write → Verify
+```
+
+### Node List
+
+1. **Schedule** — Trigger on cron schedule
+2. **Postgres / MySQL / MongoDB** — Read source database
+3. **IF** — Check if records exist or need updating
+4. **Set / Code** — Transform and clean data
+5. **Postgres / MySQL** — Write to target database
+6. **Postgres** — Update sync timestamp or log result
+
+### Use Cases
+
+- Database synchronization between systems
+- ETL (Extract, Transform, Load) workflows
+- Scheduled reports from database queries
+- Data backup and archival
+- Incremental sync (only new/changed records)
+
+### Quick Start Example
+
+```text
+1. Schedule (every 15 minutes)
+2. Postgres (query new records since last sync)
+3. IF (check if records exist in target)
+4. MySQL (insert new / update existing)
+5. Postgres (update sync timestamp)
+```
+
+### Key Configuration Notes
+
+```javascript
+// Postgres SELECT with parameters
+{
+  operation: "executeQuery",
+  query: "SELECT * FROM users WHERE updated_at > $1",
+  additionalFields: {
+    queryParams: "={{$json.lastSync}}"
+  }
+}
+
+// Postgres INSERT / UPSERT
+{
+  operation: "insert",
+  table: "users",
+  columns: "id,name,email",
+  additionalFields: {
+    upsert: true,
+    conflictResolution: "id"
+  }
+}
+```
+
+---
+
+## Pattern 4: AI Agent Workflow
+
+### Structure
+
+```text
+Trigger → AI Agent (Model + Tools + Memory) → Output
+```
+
+### Node List
+
+1. **Webhook / Chat Trigger** — Receive user message
+2. **AI Agent** (`nodes-langchain.agent`) — Core reasoning node
+3. **OpenAI Chat Model** — Connected via `ai_languageModel`
+4. **Tool nodes** — Connected via `ai_tool` (HTTP Request, DB Query, etc.)
+5. **Window Buffer Memory** — Connected via `ai_memory`
+6. **Webhook Response** — Send AI reply back to user
+
+### Use Cases
+
+- Conversational chatbots with tool access
+- AI assistants that can query databases or call APIs
+- Content generation with data lookup
+- Multi-step reasoning and decision-making
+
+### Quick Start Example
+
+```text
+1. Webhook (receive chat message)
+2. AI Agent
+   ├─ OpenAI Chat Model    (ai_languageModel)
+   ├─ HTTP Request Tool    (ai_tool)
+   ├─ Database Tool        (ai_tool)
+   └─ Window Buffer Memory (ai_memory)
+3. Webhook Response (send AI reply)
+```
+
+### AI Connection Types Reference
+
+```javascript
+// Connect language model
+{
+  type: "addConnection",
+  source: "OpenAI Chat Model",
+  target: "AI Agent",
+  sourceOutput: "ai_languageModel"
+}
+
+// Connect a tool
+{
+  type: "addConnection",
+  source: "HTTP Request Tool",
+  target: "AI Agent",
+  sourceOutput: "ai_tool"
+}
+
+// Connect memory
+{
+  type: "addConnection",
+  source: "Window Buffer Memory",
+  target: "AI Agent",
+  sourceOutput: "ai_memory"
+}
+```
+
+<Tip>
+Use `ai_agents_guide()` from the n8n-mcp server for comprehensive AI workflow guidance including connection types, tool configuration, and prompt engineering.
+</Tip>
+
+---
+
+## Pattern 5: Scheduled Tasks
+
+### Structure
+
+```text
+Schedule → Fetch → Process → Deliver → Log
+```
+
+### Node List
+
+1. **Schedule Trigger** — Cron-based timing
+2. **HTTP Request / Database** — Fetch fresh data
+3. **Code / Set** — Aggregate and format data
+4. **Email / Slack** — Deliver report or notification
+5. **Error Trigger → Slack** — Notify on failure
+
+### Use Cases
+
+- Daily/weekly analytics reports emailed to team
+- Hourly health checks for external services
+- Nightly database backups
+- Periodic data synchronization
+- Maintenance workflows (cleanup, archival)
+
+### Quick Start Example
+
+**Template #2947** (Weather to Slack):
+```text
+1. Schedule (daily at 8 AM)
+2. HTTP Request (fetch weather API)
+3. Set (format weather data)
+4. Slack (post to #weather channel)
+```
+
+```javascript
+// Deploy this template directly:
+n8n_deploy_template({
+  templateId: 2947,
+  name: "Daily Weather to Slack"
+})
+```
+
+### Schedule Examples
+
+```javascript
+// Every day at 9 AM
+{
+  rule: {hour: 9}
+}
+
+// Every 15 minutes
+{
+  rule: {minute: {value: 15, mode: "everyX"}}
+}
+
+// Every Monday at 8 AM
+{
+  rule: {dayOfWeek: 1, hour: 8}
+}
+```
+
+---
+
+## Data Flow Patterns
+
+<Tabs>
+  <Tab title="Linear">
+```text
+Trigger → Transform → Action → End
+```
+**Use when:** Simple workflows with a single execution path.
+  </Tab>
+  <Tab title="Branching">
+```text
+Trigger → IF → [True Path]
+              └→ [False Path]
+```
+**Use when:** Different actions based on conditions.
+  </Tab>
+  <Tab title="Parallel">
+```text
+Trigger → [Branch 1] → Merge
+       └→ [Branch 2] ↗
+```
+**Use when:** Independent operations that can run simultaneously.
+  </Tab>
+  <Tab title="Loop">
+```text
+Trigger → Split in Batches → Process → Loop (until done)
+```
+**Use when:** Processing large datasets in chunks.
+  </Tab>
+  <Tab title="Error Handler">
+```text
+Main Flow → [Success Path]
+         └→ [Error Trigger → Error Handler]
+```
+**Use when:** Need a separate error handling workflow for critical automation.
+  </Tab>
+</Tabs>
+
+---
+
+## Common Workflow Components
+
+<AccordionGroup>
+  <Accordion title="Triggers">
+    - **Webhook** — HTTP endpoint, instant response to events
+    - **Schedule** — Cron-based timing for periodic tasks
+    - **Manual** — Click to execute (testing and admin)
+    - **Polling** — Check for changes at intervals
+
+  </Accordion>
+  <Accordion title="Transformation Nodes">
+    - **Set** — Map and transform fields (used in 68% of workflows)
+    - **Code** — Complex custom logic in JavaScript or Python
+    - **IF / Switch** — Conditional routing
+    - **Merge** — Combine multiple data streams
+
+  </Accordion>
+  <Accordion title="Error Handling">
+    - **Error Trigger** — Catch workflow-level errors
+    - **IF** — Check for error conditions inline
+    - **Stop and Error** — Explicit failure node
+    - **Continue On Fail** — Per-node setting to keep workflow running
+
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Workflow Creation Checklist
+
+<Steps>
+  <Step title="Planning Phase">
+    - Identify the pattern (webhook, API, database, AI, scheduled)
+    - List required nodes (use `search_nodes`)
+    - Map data flow: input → transform → output
+    - Plan error handling strategy
+
+  </Step>
+  <Step title="Implementation Phase">
+    - Create workflow with appropriate trigger
+    - Add data source nodes
+    - Configure authentication/credentials
+    - Add transformation nodes (Set, Code, IF)
+    - Add output/action nodes
+    - Configure error handling
+
+  </Step>
+  <Step title="Validation Phase">
+    - Validate each node with `validate_node`
+    - Validate complete workflow with `validate_workflow`
+    - Test with sample data
+    - Handle edge cases (empty data, API errors)
+
+  </Step>
+  <Step title="Deployment Phase">
+    - Review workflow settings (execution order, timeout)
+    - Activate using `activateWorkflow` operation
+    - Monitor first executions
+    - Document workflow purpose and data flow
+
+  </Step>
+</Steps>
+
+## Common Gotchas
+
+| Gotcha | Problem | Solution |
+|--------|---------|----------|
+| Webhook data structure | Can't access payload fields | Data is under `$json.body.*` |
+| Multiple input items | Node processes all items but you want one | Use "Execute Once" mode or `$json[0].field` |
+| Auth failures | 401/403 errors | Configure credentials section, not parameters |
+| Unexpected execution order | Nodes run out of order | Check Settings → Execution Order (use v1) |
+| Expression shows literal | `{{}}` not evaluated | Add `{{}}` around expressions |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Do" icon="check">
+    - Start with the simplest pattern that solves your problem
+    - Plan workflow structure before building
+    - Add error handling to every production workflow
+    - Test with sample data before activation
+    - Use descriptive node names
+    - Build iteratively (avg 56s between edits is normal)
+
+  </Card>
+  <Card title="Don't" icon="xmark">
+    - Build complex multi-pattern workflows without clear boundaries
+    - Skip validation before activation
+    - Ignore error scenarios
+    - Hardcode credentials in node parameters
+    - Forget to handle empty data cases
+    - Deploy without testing
+
+  </Card>
+</CardGroup>

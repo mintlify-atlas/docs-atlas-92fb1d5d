@@ -1,0 +1,343 @@
+---
+title: "Cross-Skill Composition"
+description: "Understand how n8n-skills work together automatically to guide you through complete workflow builds from pattern selection to validation."
+---
+
+## How Composition Works
+
+Skills are designed to be **complementary, not exclusive**. Each skill covers a distinct domain of expertise, and when your query spans multiple domains, several skills activate and contribute their knowledge in the same response.
+
+You never need to manually switch between skills or chain requests. A single comprehensive query is enough — the runtime evaluates all skill descriptions in parallel and injects every matching skill's guidance.
+
+<Info>
+  The most reliable way to trigger multi-skill responses is to ask **comprehensive, specific questions** that naturally touch on workflow structure, node searching, configuration, data mapping, and validation all at once.
+</Info>
+
+---
+
+## Flagship Example: Full Workflow Build
+
+The most powerful demonstration of cross-skill composition is building a complete, validated workflow in one query.
+
+**Your query**:
+```
+"Build and validate a webhook to Slack workflow with proper data mapping"
+```
+
+Here is what happens automatically:
+
+<Steps>
+  <Step title="Workflow Patterns identifies structure">
+    The **n8n Workflow Patterns** skill activates because the query mentions "webhook" and "workflow".
+
+    It identifies this as a **Webhook Processing Pattern** and provides the workflow structure:
+
+    ```
+    Webhook Trigger → [Transform] → Slack Notification
+    ```
+
+    It also applies the Workflow Creation Checklist:
+    - Identify the pattern
+    - List required nodes
+    - Plan error handling
+
+  </Step>
+  <Step title="MCP Tools Expert searches for nodes">
+    The **n8n MCP Tools Expert** skill activates because the query implies finding and configuring nodes.
+
+    It calls the appropriate search tools:
+
+    ```
+    search_nodes({query: "webhook"})
+    → Found: nodes-base.webhook
+
+    search_nodes({query: "slack"})
+    → Found: nodes-base.slack
+
+    get_node_essentials({nodeType: "nodes-base.slack"})
+    → Returns focused 5 KB configuration data
+    ```
+
+    It also clarifies the critical format difference:
+    - `nodes-base.slack` — for search and validate tools
+    - `n8n-nodes-base.slack` — for workflow node type in JSON
+
+  </Step>
+  <Step title="Node Configuration guides setup">
+    The **n8n Node Configuration** skill activates on "configure" and "setup".
+
+    It provides operation-specific guidance for both nodes:
+
+    **Webhook node**:
+    ```javascript
+    {
+      path: "form-submit",
+      httpMethod: "POST",
+      responseMode: "onReceived"
+    }
+    ```
+
+    **Slack node**:
+    ```javascript
+    {
+      resource: "message",
+      operation: "post",
+      channel: "#notifications",
+      text: "={{$json.body.message}}"
+    }
+    ```
+  </Step>
+  <Step title="Expression Syntax maps data">
+    The **n8n Expression Syntax** skill activates on "data mapping" and the implicit need for `{{}}` expressions.
+
+    It provides the correct expression for accessing webhook data in the Slack node:
+
+    ```
+    ✅ Correct: {{$json.body.message}}
+    ❌ Wrong:   {{$json.message}}
+    ```
+
+    <Warning>
+      Webhook data is always nested under `.body`. This is the most common mistake in webhook workflows. The Expression Syntax skill warns about this automatically when webhook + expression topics appear together.
+    </Warning>
+  </Step>
+  <Step title="Validation Expert validates">
+    The **n8n Validation Expert** skill activates on "validate".
+
+    It runs validation on the complete workflow structure:
+
+    ```
+    validate_workflow({...complete workflow JSON...})
+
+    Results:
+    ✅ Webhook node: valid
+    ✅ Slack node: valid
+    ✅ Connection: webhook → slack
+    ✅ Expression syntax correct
+    ⚠️ Warning: No error handling workflow
+    ```
+
+    It also explains the auto-sanitization system and which errors are false positives.
+  </Step>
+</Steps>
+
+**Result**: A complete, validated, working workflow — built in a single query.
+
+---
+
+## More Composition Examples
+
+### Example 1: Build an AI Agent Workflow
+
+**Query**:
+```
+"Create an AI Agent workflow with HTTP Request tool and database access"
+```
+
+**Skills that activate**:
+
+<CardGroup cols={2}>
+  <Card title="Workflow Patterns" icon="sitemap">
+    Identifies the AI Agent Workflow Pattern:
+    ```
+    Trigger → AI Agent
+      ├─ OpenAI Chat Model (ai_languageModel)
+      ├─ HTTP Request Tool (ai_tool)
+      ├─ Database Tool (ai_tool)
+      └─ Window Buffer Memory (ai_memory)
+    → Output
+    ```
+  </Card>
+  <Card title="Node Configuration" icon="sliders">
+    Explains the 8 AI connection types and the critical rule:
+
+    Tools must connect via the `ai_tool` port, not the main port.
+
+    ```
+    HTTP Request --[ai_tool]--> AI Agent  ✅
+    HTTP Request -----------> AI Agent    ❌
+    ```
+  </Card>
+  <Card title="MCP Tools Expert" icon="magnifying-glass">
+    Searches for all required nodes:
+    ```
+    search_nodes({query: "openai"})
+    search_nodes({query: "http request"})
+    search_nodes({query: "postgres"})
+    search_nodes({query: "window buffer memory"})
+    ```
+  </Card>
+  <Card title="Validation Expert" icon="shield-check">
+    Validates the AI agent connections and confirms:
+    - Language model connected correctly
+    - Tools connected via `ai_tool` port
+    - Memory configured with session key
+
+  </Card>
+</CardGroup>
+
+---
+
+### Example 2: Fix an Expression Error in a Webhook Workflow
+
+**Query**:
+```
+"My {{$json.name}} is showing undefined in my webhook workflow"
+```
+
+**Skills that activate**:
+
+| Skill | Contribution |
+|---|---|
+| **n8n Expression Syntax** | Identifies the root cause: webhook data is under `.body`, not at root level |
+| **n8n Workflow Patterns** | Provides context about webhook data structure and the common gotcha |
+
+**Combined response**:
+```
+[n8n Expression Syntax activates]
+
+Webhook data is nested under .body:
+
+❌ {{$json.name}}        → undefined
+✅ {{$json.body.name}}   → "John"
+
+Webhook data structure:
+{
+  headers: {...},
+  query: {...},
+  body: {
+    name: "John"   ← Your data is HERE
+  }
+}
+```
+
+---
+
+### Example 3: Create a Scheduled Database Sync
+
+**Query**:
+```
+"Create a scheduled workflow that syncs Postgres to MySQL every 15 minutes"
+```
+
+**Skills that activate**:
+
+<Steps>
+  <Step title="Workflow Patterns + Database Operations">
+    Identifies this as a **Scheduled Task** pattern combined with **Database Operations**.
+
+    Provides the node structure:
+    ```
+    Schedule (every 15 min)
+      → Postgres (SELECT new records WHERE updated_at > last_sync)
+      → IF (records exist)
+      → Set (map Postgres schema to MySQL schema)
+      → MySQL (INSERT or UPDATE)
+      → Postgres (UPDATE sync_log SET last_sync = NOW())
+      → Slack (notify: "Synced X records")
+    ```
+  </Step>
+  <Step title="Node Configuration">
+    Guides the Postgres node setup with parameterized queries:
+    ```javascript
+    {
+      operation: "executeQuery",
+      query: "SELECT * FROM users WHERE updated_at > $1 LIMIT 1000",
+      parameters: ["={{$node['Get Last Sync'].json.last_sync}}"]
+    }
+    ```
+
+    Also warns about the SQL injection risk of string concatenation.
+  </Step>
+  <Step title="MCP Tools Expert">
+    Searches for the required nodes and retrieves their configuration essentials.
+  </Step>
+  <Step title="Validation Expert">
+    Validates the complete workflow and checks that the Schedule trigger's timezone is set.
+  </Step>
+</Steps>
+
+---
+
+## Tips for Triggering Multi-Skill Responses
+
+<CardGroup cols={2}>
+  <Card title="Use Comprehensive Queries" icon="expand">
+    Single-domain queries activate one skill. Multi-domain queries activate several.
+
+    **One skill**: "How do I write n8n expressions?"
+
+    **Multiple skills**: "Build and validate a webhook workflow with correct data mapping expressions"
+  </Card>
+  <Card title="Name the Goal, Not the Tool" icon="flag">
+    Describe what you want to accomplish rather than which skill to use. The runtime matches skills to your goal automatically.
+
+    **Less effective**: "Use the Validation Expert to check my workflow"
+
+    **More effective**: "Build a workflow and make sure it's valid before I deploy"
+  </Card>
+  <Card title="Include End-to-End Requirements" icon="arrow-right-arrow-left">
+    Mention all phases of the workflow lifecycle in one query to activate the full skill chain:
+
+    ```
+    "Build, configure, validate, and explain
+    the expressions in a webhook to database
+    workflow with error handling"
+    ```
+  </Card>
+  <Card title="Reference Related Concepts" icon="link">
+    Use terms from multiple skill domains naturally:
+
+    - "webhook" → Patterns + Expression Syntax
+    - "validate" → Validation Expert
+    - "expressions" → Expression Syntax
+    - "configure" → Node Configuration
+    - "search nodes" → MCP Tools Expert
+
+  </Card>
+</CardGroup>
+
+---
+
+## Skill Integration Map
+
+This diagram shows how skills collaborate in typical workflows:
+
+```
+Workflow Build Request
+        │
+        ▼
+┌─────────────────┐      Provides structure,
+│ Workflow Patterns│─────► pattern, checklist
+└─────────────────┘
+        │
+        ▼
+┌─────────────────┐      Searches nodes, finds
+│ MCP Tools Expert│─────► templates, validates
+└─────────────────┘
+        │
+        ▼
+┌─────────────────┐      Operation-specific
+│ Node Config     │─────► property guidance
+└─────────────────┘
+        │
+        ├─────────────────────────────────────────┐
+        ▼                                         ▼
+┌─────────────────┐      Expression         ┌──────────────┐
+│ Expression      │─────► syntax &           │ Code JS/Py   │
+│ Syntax          │      data mapping        │              │
+└─────────────────┘                         └──────────────┘
+        │
+        ▼
+┌─────────────────┐      Validates, fixes,
+│ Validation      │─────► interprets errors
+│ Expert          │
+└─────────────────┘
+```
+
+---
+
+## Getting Help
+
+- **Issues**: [github.com/czlonkowski/n8n-skills/issues](https://github.com/czlonkowski/n8n-skills/issues)
+- **Discussions**: [github.com/czlonkowski/n8n-skills/discussions](https://github.com/czlonkowski/n8n-skills/discussions)

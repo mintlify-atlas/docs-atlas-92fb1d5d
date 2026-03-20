@@ -1,0 +1,368 @@
+---
+title: "Installation"
+description: "Complete installation instructions for n8n-skills across all platforms — Claude Code plugin, manual setup, Claude.ai, and the Claude API/SDK."
+---
+
+## Prerequisites
+
+Before installing n8n-skills, set up the n8n-mcp MCP server. The skills rely on it for node data, validation, and templates.
+
+<Steps>
+  <Step title="Install n8n-mcp">
+    ```bash
+    npm install -g n8n-mcp
+    ```
+  </Step>
+  <Step title="Configure .mcp.json">
+    Add the server to `.mcp.json` in your project root or home directory:
+
+    ```json .mcp.json
+    {
+      "mcpServers": {
+        "n8n-mcp": {
+          "command": "npx",
+          "args": ["n8n-mcp"],
+          "env": {
+            "MCP_MODE": "stdio",
+            "LOG_LEVEL": "error",
+            "DISABLE_CONSOLE_OUTPUT": "true",
+            "N8N_API_URL": "https://your-n8n-instance.com",
+            "N8N_API_KEY": "your-api-key-here"
+          }
+        }
+      }
+    }
+    ```
+
+    <Note>
+      `N8N_API_URL` and `N8N_API_KEY` are optional. Without them, read-only tools (node search, validation, templates) work fine. Add them to unlock workflow creation and management (`n8n_create_workflow`, `n8n_update_partial_workflow`, etc.).
+    </Note>
+  </Step>
+</Steps>
+
+---
+
+## Installation methods
+
+### Method 1: Claude Code plugin (recommended)
+
+The fastest way to install. One command installs all 7 skills:
+
+```bash
+/plugin install czlonkowski/n8n-skills
+```
+
+Skills activate automatically after installation — no restart needed.
+
+### Method 2: Claude Code marketplace
+
+Browse the plugin before installing:
+
+```bash
+/plugin marketplace add czlonkowski/n8n-skills
+```
+
+Then browse and select:
+
+```bash
+/plugin install
+```
+
+Select **n8n-mcp-skills** from the list.
+
+### Method 3: Manual installation
+
+Clone the repository and copy the skill files to Claude Code's skills directory.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    # Clone the repository
+    git clone https://github.com/czlonkowski/n8n-skills.git
+
+    # Create the skills directory if it doesn't exist
+    mkdir -p ~/.claude/skills
+
+    # Copy all 7 skills
+    cp -r n8n-skills/skills/* ~/.claude/skills/
+    ```
+
+    Verify the copy:
+
+    ```bash
+    ls ~/.claude/skills/
+    # Expected output:
+    # n8n-expression-syntax  n8n-mcp-tools-expert  n8n-workflow-patterns
+    # n8n-validation-expert  n8n-node-configuration  n8n-code-javascript  n8n-code-python
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    # Clone the repository
+    git clone https://github.com/czlonkowski/n8n-skills.git
+
+    # Create the skills directory
+    New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills"
+
+    # Copy all 7 skills
+    Copy-Item -Recurse n8n-skills\skills\* "$env:USERPROFILE\.claude\skills\"
+    ```
+
+    <Note>
+      If you encounter permission errors, run PowerShell as Administrator.
+    </Note>
+  </Tab>
+</Tabs>
+
+After copying, restart Claude Code. Skills will activate automatically on the next launch.
+
+### Method 4: Claude.ai (web)
+
+Claude.ai requires uploading each skill as a separate zip file.
+
+<Steps>
+  <Step title="Download the repository">
+    Clone or download the repository from GitHub:
+    ```bash
+    git clone https://github.com/czlonkowski/n8n-skills.git
+    cd n8n-skills/skills
+    ```
+  </Step>
+  <Step title="Zip each skill">
+    ```bash
+    zip -r n8n-expression-syntax.zip n8n-expression-syntax/
+    zip -r n8n-mcp-tools-expert.zip n8n-mcp-tools-expert/
+    zip -r n8n-workflow-patterns.zip n8n-workflow-patterns/
+    zip -r n8n-validation-expert.zip n8n-validation-expert/
+    zip -r n8n-node-configuration.zip n8n-node-configuration/
+    zip -r n8n-code-javascript.zip n8n-code-javascript/
+    zip -r n8n-code-python.zip n8n-code-python/
+    ```
+  </Step>
+  <Step title="Upload to Claude.ai">
+    1. Go to [claude.ai](https://claude.ai)
+    2. Navigate to **Settings** → **Capabilities** → **Skills**
+    3. Click **Upload Skill**
+    4. Upload each `.zip` file individually
+    5. Confirm each upload
+
+  </Step>
+  <Step title="Verify">
+    In a new conversation, ask:
+    ```
+    List my active skills
+    ```
+    You should see all n8n skills listed.
+  </Step>
+</Steps>
+
+### Method 5: Claude API / SDK
+
+If you're building an application with the Anthropic SDK, load the skills from the cloned directory and pass them in each API call.
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/czlonkowski/n8n-skills.git
+    ```
+  </Step>
+  <Step title="Install the Anthropic SDK">
+    ```bash
+    npm install @anthropic-ai/sdk
+    ```
+  </Step>
+  <Step title="Load skills in your application">
+    ```typescript
+    import Anthropic from '@anthropic-ai/sdk';
+    import fs from 'fs';
+    import path from 'path';
+
+    const client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    function loadSkillsFromDirectory(dir: string) {
+      const skillDirs = fs.readdirSync(dir);
+      return skillDirs.map(skillName => {
+        const skillPath = path.join(dir, skillName, 'SKILL.md');
+        const skillContent = fs.readFileSync(skillPath, 'utf-8');
+        return {
+          name: skillName,
+          content: skillContent
+        };
+      });
+    }
+
+    const skills = loadSkillsFromDirectory('./n8n-skills/skills');
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      messages: [{
+        role: 'user',
+        content: 'Build a webhook to Slack workflow'
+      }],
+      skills: skills
+    });
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Verification
+
+After installation, run these checks to confirm everything is working.
+
+**Check MCP server availability:**
+
+```
+Ask Claude: "Can you search for the webhook node using n8n-mcp?"
+```
+
+Expected response:
+```
+[Uses search_nodes tool]
+Found: nodes-base.webhook (Webhook trigger node)
+```
+
+**Check skill activation:**
+
+```
+Ask Claude: "How do I access webhook data in n8n expressions?"
+```
+
+Expected: The Expression Syntax skill activates and responds with `$json.body.*` access patterns.
+
+**Check cross-skill composition:**
+
+```
+Ask Claude: "Build and validate a webhook to Slack workflow"
+```
+
+Expected: Multiple skills activate and collaborate to produce a complete, validated workflow.
+
+---
+
+## Selective installation
+
+If you only need specific skills, install them individually:
+
+```bash
+# Only install the Expression Syntax and MCP Tools Expert skills
+cp -r n8n-skills/skills/n8n-expression-syntax ~/.claude/skills/
+cp -r n8n-skills/skills/n8n-mcp-tools-expert ~/.claude/skills/
+```
+
+<Tip>
+  The **MCP Tools Expert** skill is marked highest priority and is recommended for all installations. It teaches correct tool selection, parameter formats, and validation profiles — knowledge that every other skill depends on.
+</Tip>
+
+---
+
+## Updating
+
+To update all skills to the latest version:
+
+```bash
+cd n8n-skills
+git pull origin main
+cp -r skills/* ~/.claude/skills/
+```
+
+To update a single skill:
+
+```bash
+cp -r n8n-skills/skills/n8n-expression-syntax ~/.claude/skills/
+```
+
+---
+
+## Uninstalling
+
+**Remove all n8n skills:**
+
+```bash
+rm -rf ~/.claude/skills/n8n-*
+```
+
+**Remove a specific skill:**
+
+```bash
+rm -rf ~/.claude/skills/n8n-expression-syntax
+```
+
+**Claude.ai**: Go to **Settings** → **Capabilities** → **Skills** and delete each n8n skill individually.
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Skills not activating">
+    1. Verify skills are in the correct directory:
+       ```bash
+       ls ~/.claude/skills/
+       ```
+    2. Check that each skill folder contains a `SKILL.md` file with valid frontmatter:
+       ```markdown
+       ---
+       name: n8n Expression Syntax
+       description: Validate n8n expression syntax...
+       ---
+       ```
+    3. Reload Claude Code or clear its cache.
+    4. Rephrase your query to include activation keywords. For example, instead of `"How do I use expressions?"` try `"How do I write n8n expressions with {{}} syntax?"`
+
+  </Accordion>
+
+  <Accordion title="MCP tools not available">
+    1. Verify `.mcp.json` is in the correct location.
+    2. Check n8n-mcp is installed:
+       ```bash
+       npm list -g n8n-mcp
+       ```
+    3. Test the MCP server directly:
+       ```bash
+       npx n8n-mcp
+       ```
+    4. Restart Claude Code.
+
+  </Accordion>
+
+  <Accordion title="Workflow management tools missing (n8n_create_workflow, etc.)">
+    These tools require a connected n8n instance. Verify your `.mcp.json` includes:
+    ```json
+    "N8N_API_URL": "https://your-n8n-instance.com",
+    "N8N_API_KEY": "your-api-key-here"
+    ```
+    Test API access directly:
+    ```bash
+    curl -H "X-N8N-API-KEY: your-key" https://your-n8n-instance.com/api/v1/workflows
+    ```
+    Read-only tools (search, validate, templates) still work without the API configuration.
+  </Accordion>
+
+  <Accordion title="Permission errors on macOS / Linux">
+    ```bash
+    sudo chown -R $USER ~/.claude
+    chmod -R 755 ~/.claude/skills
+    ```
+  </Accordion>
+
+  <Accordion title="Permission errors on Windows">
+    Run PowerShell as Administrator and re-run the installation commands.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Usage guide" icon="book-open" href="/guides/usage">
+    Learn how to write queries that activate the right skills and get the best results
+  </Card>
+  <Card title="Skills overview" icon="grid" href="/skills/overview">
+    Explore all 7 skills, their capabilities, and activation triggers
+  </Card>
+</CardGroup>

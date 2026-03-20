@@ -1,0 +1,109 @@
+---
+title: "Introduction"
+description: "n8n-skills is a collection of 7 Claude Code skills that teach AI assistants how to build production-ready n8n workflows using the n8n-mcp MCP server."
+---
+
+## What is n8n-skills?
+
+n8n-skills is a collection of **7 complementary Claude Code skills** that give AI assistants expert knowledge for building n8n workflows. Each skill covers a specific domain — expression syntax, MCP tool usage, workflow architecture, validation, node configuration, and code writing in JavaScript and Python.
+
+Skills activate **automatically** when your query matches their domain. You don't invoke them manually; they work in the background, providing Claude with the right context at the right time.
+
+## Architecture
+
+n8n-skills works by combining two components:
+
+| Component | Role |
+|---|---|
+| **n8n-mcp MCP server** | Data access — 525+ nodes, validation engine, 2,653+ templates, workflow management |
+| **Claude skills** | Expert guidance — how to use MCP tools correctly, which patterns to apply, how to interpret errors |
+
+Together, they create an expert workflow builder with deep n8n knowledge baked in.
+
+<Note>
+  The n8n-mcp MCP server must be installed and configured before the skills can access node data, templates, or workflow management tools. See [Installation](/installation) to get set up.
+</Note>
+
+## The 7 skills
+
+<CardGroup cols={2}>
+  <Card title="Expression Syntax" icon="code" href="/skills/expression-syntax">
+    Master n8n's `{{}}` expression syntax, core variables (`$json`, `$node`, `$now`, `$env`), and the critical webhook `.body` gotcha
+  </Card>
+  <Card title="MCP Tools Expert" icon="wrench" href="/skills/mcp-tools-expert">
+    Use n8n-mcp tools correctly — right tool for each task, correct `nodeType` format, and the right validation profile
+  </Card>
+  <Card title="Workflow Patterns" icon="diagram-project" href="/skills/workflow-patterns">
+    5 proven architectural patterns: webhook processing, HTTP API integration, database, AI agent, and scheduled automation
+  </Card>
+  <Card title="Validation Expert" icon="shield-check" href="/skills/validation-expert">
+    Interpret validation errors, handle false positives, understand auto-sanitization, and choose the right validation profile
+  </Card>
+  <Card title="Node Configuration" icon="sliders" href="/skills/node-configuration">
+    Operation-aware configuration with property dependency chains (e.g. `sendBody → contentType`) and all 8 AI connection types
+  </Card>
+  <Card title="Code: JavaScript" icon="js" href="/skills/code-javascript">
+    Write JavaScript in Code nodes with correct data access patterns, `$helpers`, `DateTime`, and the top 5 error patterns
+  </Card>
+  <Card title="Code: Python" icon="python" href="/skills/code-python">
+    Use Python in Code nodes with full awareness of library limitations — no `requests`, `pandas`, or `numpy` available
+  </Card>
+  <Card title="Skills Overview" icon="grid" href="/skills/overview">
+    See how all 7 skills complement each other and which queries trigger each one
+  </Card>
+</CardGroup>
+
+## Why these skills exist
+
+Building n8n workflows programmatically has a set of common failure modes:
+
+- Using MCP tools with incorrect parameter formats
+- Getting stuck in validation error loops
+- Accessing webhook data at the wrong path (`$json.name` instead of `$json.body.name`)
+- Misconfiguring nodes with hidden property dependencies
+- Not knowing which workflow pattern fits the task
+
+These skills solve each problem by giving Claude accurate, grounded knowledge — drawn from real MCP tool responses, real validation errors, and 2,653+ actual n8n workflow templates.
+
+## Skills work together
+
+Skills are designed to compose. When you ask something like **"Build and validate a webhook to Slack workflow"**, multiple skills activate and collaborate:
+
+1. **Workflow Patterns** identifies the webhook processing pattern and provides the node structure
+2. **MCP Tools Expert** searches for webhook and Slack nodes using `search_nodes`, retrieves configuration with `get_node`
+3. **Node Configuration** guides the setup of each node's required properties
+4. **Expression Syntax** provides correct data mapping: `{{$json.body.message}}`, not `{{$json.message}}`
+5. **Validation Expert** validates the complete workflow and interprets any errors
+
+The result is a complete, validated, production-ready workflow.
+
+## What's included
+
+- **7** complementary skills that work together
+- **525+** n8n nodes supported
+- **2,653+** workflow templates used as grounding for patterns and examples
+- **10** production-tested Code node patterns
+- Comprehensive error catalogs and troubleshooting guides
+
+## Prerequisites
+
+Before using n8n-skills, you need:
+
+1. **n8n-mcp MCP server** — installed and configured with your n8n instance URL and API key
+2. **Claude access** — Claude Code (desktop), Claude.ai (web), or Claude API (via SDK)
+3. **`.mcp.json`** — configured to point Claude at your n8n-mcp server
+
+<Note>
+  `N8N_API_URL` and `N8N_API_KEY` in your `.mcp.json` are optional but required for workflow creation and management tools. Without them, read-only tools (node search, validation, templates) still work.
+</Note>
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get to a working state in 4 steps — install the MCP server, configure it, install the skills, and test
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Full installation guide for all platforms: Claude Code plugin, manual, Claude.ai, and the Claude API/SDK
+  </Card>
+</CardGroup>

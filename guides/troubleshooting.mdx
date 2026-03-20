@@ -1,0 +1,388 @@
+---
+title: "Troubleshooting"
+description: "Solutions for common problems with skill activation, MCP tools, n8n API access, validation errors, and expressions."
+---
+
+## Verification Queries
+
+Before diving into specific issues, run these queries to confirm your installation is working:
+
+```
+1. Test MCP server:
+   "Can you search for the webhook node using n8n-mcp?"
+   Expected: [Uses search_nodes] → Found: nodes-base.webhook
+
+2. Test skill activation:
+   "How do I access webhook data in n8n expressions?"
+   Expected: [n8n Expression Syntax activates] → Webhook data is under $json.body...
+
+3. Test cross-skill composition:
+   "Build and validate a webhook to Slack workflow"
+   Expected: Multiple skills activate and collaborate on a complete workflow
+```
+
+---
+
+## Installation Problems
+
+<AccordionGroup>
+  <Accordion title="Skills not activating">
+    **Symptoms**: Claude responds without skill guidance; no skill-specific expertise in the response.
+
+    **Cause 1 — Skills in wrong directory**
+
+    Verify the skills are in the correct location:
+
+    ```bash
+    ls ~/.claude/skills/
+    # Should show: n8n-expression-syntax, n8n-mcp-tools-expert, etc.
+    ```
+
+    If the directory is empty or missing:
+
+    ```bash
+    mkdir -p ~/.claude/skills
+    cp -r /path/to/n8n-skills/skills/* ~/.claude/skills/
+    ```
+
+    **Cause 2 — SKILL.md frontmatter format incorrect**
+
+    Each skill directory must contain a `SKILL.md` with valid frontmatter:
+
+    ```markdown
+    ---
+    name: n8n Expression Syntax
+    description: Validate n8n expression syntax and fix common errors. Use when
+      writing n8n expressions, using {{}} syntax, accessing $json/$node
+      variables, or troubleshooting expression errors in workflows.
+    ---
+    ```
+
+    Check that the `---` delimiters are present and the `name` and `description` fields are populated.
+
+    **Cause 3 — Claude Code not reloaded**
+
+    After installing skills, restart Claude Code. Skills are loaded at startup.
+
+    **Cause 4 — Query doesn't match activation keywords**
+
+    Rephrase your query to include the skill's trigger keywords:
+
+    ```
+    Instead of: "How do I use expressions?"
+    Try:        "How do I write n8n expressions with {{}} syntax?"
+    ```
+  </Accordion>
+
+  <Accordion title="Wrong skill activates">
+    **Symptoms**: A different skill than expected activates for your query.
+
+    This is usually **not a problem** — skills complement each other, and the activated skill may contain relevant guidance.
+
+    If you need a specific skill, make your query more explicit:
+
+    ```
+    "Using n8n MCP tools, search for the webhook node"
+    "In the context of n8n expression syntax, explain $json.body"
+    ```
+
+    For comprehensive queries that need multiple skills:
+    ```
+    "Build, configure, and validate a webhook workflow with explanations"
+    ```
+
+    All relevant skills will activate automatically when the query is broad enough.
+  </Accordion>
+
+  <Accordion title="MCP tools not available">
+    **Symptoms**: Claude reports that n8n-mcp tools are not available, or tool calls fail.
+
+    **Step 1 — Verify `.mcp.json` location and format**
+
+    The file should be in your project root or home directory:
+
+    ```json
+    {
+      "mcpServers": {
+        "n8n-mcp": {
+          "command": "npx",
+          "args": ["n8n-mcp"],
+          "env": {
+            "MCP_MODE": "stdio",
+            "LOG_LEVEL": "error",
+            "DISABLE_CONSOLE_OUTPUT": "true"
+          }
+        }
+      }
+    }
+    ```
+
+    **Step 2 — Verify n8n-mcp is installed**
+
+    ```bash
+    npm list -g n8n-mcp
+    ```
+
+    If not installed:
+
+    ```bash
+    npm install -g n8n-mcp
+    ```
+
+    **Step 3 — Test the MCP server directly**
+
+    ```bash
+    npx n8n-mcp
+    ```
+
+    The server should start without errors.
+
+    **Step 4 — Restart Claude Code**
+
+    MCP servers are connected at startup. After fixing `.mcp.json`, restart Claude Code.
+  </Accordion>
+
+  <Accordion title="n8n API tools missing (n8n_create_workflow, etc.)">
+    **Symptoms**: Tools like `n8n_create_workflow`, `n8n_update_partial_workflow`, and `n8n_list_workflows` are not available.
+
+    **Cause**: `N8N_API_URL` and `N8N_API_KEY` are not configured.
+
+    **Solution**: Add them to your `.mcp.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "n8n-mcp": {
+          "command": "npx",
+          "args": ["n8n-mcp"],
+          "env": {
+            "MCP_MODE": "stdio",
+            "LOG_LEVEL": "error",
+            "DISABLE_CONSOLE_OUTPUT": "true",
+            "N8N_API_URL": "https://your-n8n-instance.com",
+            "N8N_API_KEY": "your-api-key-here"
+          }
+        }
+      }
+    }
+    ```
+
+    **Test your API access**:
+
+    ```bash
+    curl -H "X-N8N-API-KEY: your-key" \
+      https://your-n8n-instance/api/v1/workflows
+    ```
+
+    A successful response returns a JSON list of workflows.
+
+    <Note>
+      Without the API keys, skills still work for node search, validation, and template lookup. Only workflow creation and management require the API connection.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Permission issues installing skills">
+    **Symptoms**: `Permission denied` errors when copying skill files.
+
+    **macOS / Linux**:
+
+    ```bash
+    sudo chown -R $USER ~/.claude
+    chmod -R 755 ~/.claude/skills
+    ```
+
+    **Windows**:
+
+    Run PowerShell as Administrator, then:
+
+    ```powershell
+    New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills"
+    Copy-Item -Recurse skills\* "$env:USERPROFILE\.claude\skills\" -Force
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Validation Errors
+
+<AccordionGroup>
+  <Accordion title="Workflow validation keeps failing in a loop">
+    **Symptoms**: Validation runs, finds errors, you fix them, validation finds more errors.
+
+    **What's happening**: This is the expected **validation loop workflow** — each fix reveals the next issue. This is normal and expected.
+
+    **Recommended approach**:
+
+    <Steps>
+      <Step title="Use the minimal profile first">
+        Start with the least strict validation profile to get the workflow structure correct:
+
+        ```
+        validate_node({nodeType: "nodes-base.slack", mode: "minimal"})
+        ```
+      </Step>
+      <Step title="Switch to runtime profile">
+        Once the structure is valid, use the runtime profile to catch operational errors:
+
+        ```
+        validate_node({
+          nodeType: "nodes-base.slack",
+          mode: "full",
+          profile: "runtime"
+        })
+        ```
+      </Step>
+      <Step title="Identify false positives">
+        Some validation errors are **known false positives** — errors that the auto-sanitization system will fix on the next update. The Validation Expert skill identifies these.
+
+        Auto-sanitization fixes:
+        - Binary operator structures (equals, contains)
+        - Unary operator structures (isEmpty, isNotEmpty)
+        - Missing metadata in IF/Switch nodes
+
+        Auto-sanitization cannot fix:
+        - Broken connections between nodes
+        - Branch count mismatches in IF nodes
+
+      </Step>
+    </Steps>
+  </Accordion>
+
+  <Accordion title="Expression showing as literal text">
+    **Symptoms**: The output contains `{{$json.email}}` as a string instead of the resolved value.
+
+    **Cause**: The `{{}}` wrapper is missing or the expression is inside a Code node.
+
+    **Fix for regular nodes** — always wrap expressions in `{{}}`:
+
+    ```
+    ❌ $json.body.email
+    ✅ {{$json.body.email}}
+    ```
+
+    **In Code nodes** — do not use `{{}}` at all:
+
+    ```javascript
+    // ❌ Wrong in Code node
+    const email = {{$json.body.email}};
+
+    // ✅ Correct in Code node
+    const email = $input.first().json.body.email;
+    ```
+  </Accordion>
+
+  <Accordion title="Webhook data undefined ($json.field is empty)">
+    **Symptoms**: Expressions like `{{$json.email}}` return `undefined` or an empty value in webhook workflows.
+
+    **Cause**: Webhook payload data is nested under `.body`, not at the root.
+
+    **Fix**:
+
+    ```
+    ❌ {{$json.email}}             → undefined
+    ✅ {{$json.body.email}}        → "john@example.com"
+    ```
+
+    The full webhook data structure:
+
+    ```json
+    {
+      "headers": { "content-type": "application/json" },
+      "params":  { "id": "123" },
+      "query":   { "token": "abc" },
+      "body":    {
+        "name": "John",
+        "email": "john@example.com"
+      }
+    }
+    ```
+
+    Accessing different parts:
+
+    ```javascript
+    // Body (most common)
+    {{$json.body.email}}
+    {{$json.body.user.name}}
+    {{$json.body.items[0].price}}
+
+    // Headers
+    {{$json.headers['content-type']}}
+    {{$json.headers['x-api-key']}}
+
+    // Query parameters
+    {{$json.query.page}}
+    {{$json.query.token}}
+    ```
+  </Accordion>
+
+  <Accordion title="Python external library not found">
+    **Symptoms**: Error like `ModuleNotFoundError: No module named 'requests'` or `ModuleNotFoundError: No module named 'pandas'` in Python Code nodes.
+
+    **Cause**: n8n Python Code nodes run in a sandboxed environment. External libraries are not available.
+
+    **What's available** (standard library only):
+
+    ```python
+    import json      # ✅ Available
+    import datetime  # ✅ Available
+    import re        # ✅ Available
+    import math      # ✅ Available
+    import random    # ✅ Available
+    import hashlib   # ✅ Available
+
+    import requests  # ❌ NOT available
+    import pandas    # ❌ NOT available
+    import numpy     # ❌ NOT available
+    ```
+
+    **Solutions**:
+
+    1. **Switch to JavaScript** — JavaScript Code nodes have `$helpers.httpRequest()` built in for HTTP calls, and generally have more built-in utilities. Use JavaScript for 95% of use cases.
+
+    2. **Use standard library workarounds** — for JSON handling, use `json` module; for HTTP calls, use the HTTP Request node before your Code node.
+
+    3. **Use the HTTP Request node** instead of `requests` in Python:
+
+    ```
+    HTTP Request node → Python Code node
+    (fetch data)        (process with json module)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Common Error Messages
+
+| Error Message | Meaning | Fix |
+|---|---|---|
+| `Required field 'channel' missing` | Slack node missing required property | Add `channel: "#general"` to node config |
+| `binary operator cannot have singleValue` | IF node filter structure issue | Auto-sanitization will fix on next update; it's a false positive |
+| `Branch count mismatch` | IF node has wrong number of output connections | Check that both True and False branches are connected |
+| `nodeType format incorrect` | Using `n8n-nodes-base.*` where `nodes-base.*` is expected | Use `nodes-base.slack` for search/validate, `n8n-nodes-base.slack` for workflow JSON |
+| `Expression evaluated to undefined` | Accessing a field that doesn't exist at that path | Check the data structure — for webhooks, add `.body.` before your field |
+| `Cannot find module 'requests'` | Python external library used in Code node | Switch to JavaScript or use HTTP Request node |
+| `Webhook URL already exists` | Duplicate webhook path | Change the `path` value to a unique string |
+| `Execution timeout` | Workflow ran longer than the timeout setting | Increase timeout in workflow settings or optimize slow nodes |
+
+---
+
+## Getting Help
+
+If you've worked through the troubleshooting steps above and are still stuck:
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/czlonkowski/n8n-skills/issues">
+    Report bugs, installation problems, or unexpected behavior. Include your platform (macOS/Linux/Windows) and the exact error message.
+  </Card>
+  <Card title="GitHub Discussions" icon="comments" href="https://github.com/czlonkowski/n8n-skills/discussions">
+    Ask questions, share workflows, and discuss usage patterns with the community.
+  </Card>
+</CardGroup>
+
+When reporting an issue, include:
+- Your operating system and Claude version
+- The exact query you used
+- The expected behavior vs. what actually happened
+- Any error messages from Claude or the terminal

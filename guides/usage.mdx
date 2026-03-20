@@ -1,0 +1,498 @@
+---
+title: "Usage Guide"
+description: "Learn how to use n8n-skills effectively, from skill activation to cross-skill composition and best practices."
+---
+
+## How Skills Activate
+
+Skills activate **automatically** based on your query content. You do not need to manually invoke them — the Claude runtime reads each skill's frontmatter `description` field and matches it against your query keywords.
+
+For example, the n8n Expression Syntax skill has this frontmatter:
+
+```markdown
+---
+name: n8n Expression Syntax
+description: Validate n8n expression syntax and fix common errors. Use when writing
+  n8n expressions, using {{}} syntax, accessing $json/$node variables, or
+  troubleshooting expression errors in workflows.
+---
+```
+
+When your query mentions `{{}}` syntax, `$json`, or expression errors, this skill activates and injects its expert guidance into the conversation.
+
+## Activation Trigger Reference
+
+| Skill | Activates When Your Query Mentions |
+|---|---|
+| **n8n Expression Syntax** | expression, `{{}}` syntax, `$json`, `$node`, webhook data access, undefined variable |
+| **n8n MCP Tools Expert** | search nodes, validate, find node, MCP tools, template, workflow management |
+| **n8n Workflow Patterns** | build workflow, webhook, pattern, architecture, workflow structure |
+| **n8n Validation Expert** | validation, error, fix, debug, validate workflow, false positive |
+| **n8n Node Configuration** | configure node, property, operation, dependencies, AI workflow setup |
+| **n8n Code JavaScript** | JavaScript Code node, `$input`, `$helpers`, DateTime, Code node error |
+| **n8n Code Python** | Python Code node, Python limitations, standard library, no external libraries |
+
+---
+
+## Individual Skill Usage
+
+### 1. n8n Expression Syntax
+
+**Activates on**: expression, `{{}}` syntax, `$json`, `$node`, webhook data access
+
+<Tabs>
+  <Tab title="Example Queries">
+    ```
+    "How do I write n8n expressions?"
+    "Why is {{$json.email}} showing undefined?"
+    "Access webhook data in Slack node"
+    "What's wrong with my $node reference?"
+    ```
+  </Tab>
+  <Tab title="What You'll Learn">
+    - Correct `{{}}` syntax and when to use it
+    - Webhook data structure (`$json.body.*`)
+    - Node references (`$node["Node Name"].json`)
+    - Common mistakes and their fixes
+    - When NOT to use expressions (Code nodes)
+
+  </Tab>
+  <Tab title="Example Response">
+    ```
+    n8n expressions must be wrapped in double curly braces:
+
+    ✅ Correct: {{$json.body.email}}
+    ❌ Wrong:   $json.body.email
+
+    For webhook data, remember it's under .body:
+    {{$json.body.name}}     // Webhook form data
+    {{$json.body.message}}  // Webhook message
+
+    In Code nodes, use direct access (no {{}}):
+    const email = $json.body.email;  // Correct in Code node
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 2. n8n MCP Tools Expert
+
+**Activates on**: search nodes, validate, find node, MCP tools, template, workflow
+
+<Tabs>
+  <Tab title="Example Queries">
+    ```
+    "Find me a Slack node"
+    "How do I search for database nodes?"
+    "Validate this node configuration"
+    "What's the difference between get_node_info and get_node_essentials?"
+    "Which MCP tool should I use to create workflows?"
+    ```
+  </Tab>
+  <Tab title="What You'll Learn">
+    - Tool selection (which tool for which task)
+    - `nodeType` format differences (`nodes-base.*` vs `n8n-nodes-base.*`)
+    - Validation profiles (minimal / runtime / ai-friendly / strict)
+    - Common MCP tool mistakes
+    - Workflow management tools
+
+  </Tab>
+  <Tab title="Example Response">
+    ```
+    To find the Slack node, use search_nodes:
+
+    search_nodes({query: "slack"})
+
+    This returns:
+    - nodeType: "nodes-base.slack"         (for search/validate tools)
+    - workflowNodeType: "n8n-nodes-base.slack" (for workflows)
+
+    ⚠️ Important: Use different formats for different tools!
+
+    Next, get node details:
+    get_node_essentials({nodeType: "nodes-base.slack"})
+
+    This returns focused 5 KB data vs 100 KB+ from get_node_info.
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 3. n8n Workflow Patterns
+
+**Activates on**: build workflow, webhook, pattern, architecture, workflow structure
+
+<Tabs>
+  <Tab title="Example Queries">
+    ```
+    "Build a webhook to Slack workflow"
+    "What's the best pattern for API integration?"
+    "Create a scheduled database workflow"
+    "Show me webhook processing pattern"
+    ```
+  </Tab>
+  <Tab title="What You'll Learn">
+    - 5 proven patterns (webhook, HTTP API, database, AI, scheduled)
+    - Workflow creation checklist
+    - Node connection best practices
+    - Real template examples
+    - Pattern selection guide
+
+  </Tab>
+  <Tab title="Example Response">
+    ```
+    For webhook to Slack, use the Webhook Processing pattern:
+
+    Pattern Structure:
+    Webhook Trigger → [Transform] → Slack Notification
+
+    Workflow Checklist:
+    □ Search for nodes (search_nodes)
+    □ Get node configurations (get_node_essentials)
+    □ Create workflow structure
+    □ Add data mappings (expressions)
+    □ Validate workflow
+    □ Test with sample data
+
+    Real Example from Template #2947:
+    Webhook → OpenStreetMap → NWS → Slack
+    (1,500 views, proven pattern)
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 4. n8n Validation Expert
+
+**Activates on**: validation, error, fix, debug, validate workflow
+
+<Tabs>
+  <Tab title="Example Queries">
+    ```
+    "Why is my workflow validation failing?"
+    "Fix this validation error"
+    "Explain this validation warning"
+    "What does auto-sanitization do?"
+    ```
+  </Tab>
+  <Tab title="What You'll Learn">
+    - Validation loop workflow
+    - Error interpretation
+    - Auto-sanitization system
+    - False positives handling
+    - Profile selection
+
+  </Tab>
+  <Tab title="Example Response">
+    ```
+    Validation Error: "Required field 'channel' missing"
+
+    Fix:
+    validate_node_operation({
+      nodeType: "nodes-base.slack",
+      config: {
+        resource: "message",
+        operation: "post",
+        channel: "#general",  // Add this!
+        text: "Message"
+      },
+      profile: "runtime"
+    })
+
+    Auto-sanitization will fix:
+    ✅ Binary operator structures (equals, contains)
+    ✅ Unary operator structures (isEmpty, isNotEmpty)
+    ✅ Missing metadata in IF/Switch nodes
+
+    But cannot fix:
+    ❌ Broken connections
+    ❌ Branch count mismatches
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 5. n8n Node Configuration
+
+**Activates on**: configure node, property, operation, dependencies, AI workflow
+
+<Tabs>
+  <Tab title="Example Queries">
+    ```
+    "How do I configure the HTTP Request node?"
+    "What properties does the Slack node need?"
+    "Explain property dependencies"
+    "Set up AI Agent workflow"
+    ```
+  </Tab>
+  <Tab title="What You'll Learn">
+    - Operation-specific requirements
+    - Property dependencies (`sendBody` → `contentType`)
+    - AI connection types (8 types)
+    - Common configuration patterns
+
+  </Tab>
+  <Tab title="Example Response">
+    ```
+    HTTP Request node property dependencies:
+
+    1. Set sendBody = true
+       ↓ Reveals: contentType
+
+    2. Set contentType = "json"
+       ↓ Reveals: specifyBody
+
+    3. Set specifyBody = "json"
+       ↓ Reveals: jsonBody
+
+    This cascade of 32 dependencies ensures you see only relevant properties!
+
+    For AI workflows, 8 connection types:
+    - ai_languageModel (OpenAI, Anthropic)
+    - ai_tool (HTTP Request Tool, Code Tool)
+    - ai_memory (Window Buffer Memory)
+    - ai_outputParser, ai_embedding, ai_vectorStore...
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 6. n8n Code JavaScript
+
+**Activates on**: JavaScript Code node, `$input`, `$helpers`, DateTime, Code node error
+
+<Tabs>
+  <Tab title="Example Queries">
+    ```
+    "How do I access webhook data in a Code node?"
+    "Write a JavaScript Code node that filters items"
+    "How do I make an HTTP request from a Code node?"
+    "Why is my Code node returning the wrong format?"
+    ```
+  </Tab>
+  <Tab title="What You'll Learn">
+    - Data access patterns (`$input.all()`, `$input.first()`, `$input.item`)
+    - Critical gotcha: webhook data is under `$json.body`
+    - Correct return format: `[{json: {...}}]`
+    - Built-in functions (`$helpers.httpRequest()`, `DateTime`, `$jmespath()`)
+    - Top 5 error patterns with solutions (covering 62%+ of failures)
+    - 10 production-tested patterns
+
+  </Tab>
+  <Tab title="Example Response">
+    ```
+    In Code nodes, data access uses no {{}} syntax:
+
+    // Access all items
+    const items = $input.all();
+
+    // Access first item
+    const first = $input.first().json;
+
+    // For webhook data
+    const email = $input.first().json.body.email;
+
+    // Return format is always an array of objects
+    return [{
+      json: {
+        processed: true,
+        email: email
+      }
+    }];
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 7. n8n Code Python
+
+**Activates on**: Python Code node, Python limitations, standard library, no external libraries
+
+<Tabs>
+  <Tab title="Example Queries">
+    ```
+    "Can I use pandas in Python Code node?"
+    "How do I parse JSON in a Python Code node?"
+    "What Python libraries are available in n8n?"
+    "Write a Python Code node that processes dates"
+    ```
+  </Tab>
+  <Tab title="What You'll Learn">
+    - Critical limitation: no external libraries (requests, pandas, numpy)
+    - Python data access (`_input`, `_json`, `_node`)
+    - Standard library reference (json, datetime, re, etc.)
+    - Workarounds for missing libraries
+    - Common Python patterns for n8n
+
+  </Tab>
+  <Tab title="Example Response">
+    ```
+    ⚠️ Python Code nodes have a critical limitation:
+    No external libraries (requests, pandas, numpy, etc.)
+
+    Use JavaScript for 95% of use cases.
+
+    If you must use Python, only standard library is available:
+    import json      # ✅ Available
+    import datetime  # ✅ Available
+    import re        # ✅ Available
+    import requests  # ❌ NOT available
+    import pandas    # ❌ NOT available
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Be Specific" icon="bullseye">
+    More specific queries activate skills with better context.
+
+    **Good**: "Build a webhook that receives form data and posts to Slack"
+
+    **Better**: "Build a webhook to Slack workflow with form validation and error handling"
+  </Card>
+  <Card title="Ask Follow-Up Questions" icon="messages">
+    Skills provide deep knowledge. Don't hesitate to dig deeper:
+
+    - "Explain property dependencies in HTTP Request node"
+    - "Show me more webhook examples"
+    - "What are validation profiles?"
+
+  </Card>
+  <Card title="Request Validation" icon="shield-check">
+    Always ask for validation alongside builds:
+
+    - "Build this workflow AND validate it"
+    - "Check if this configuration is correct"
+
+  </Card>
+  <Card title="Leverage Cross-Skill Knowledge" icon="arrows-cross">
+    Trigger multiple skills in a single query:
+
+    ```
+    "Build, validate, and explain the
+    expressions in this workflow"
+    → Activates: Patterns + Validation
+       + Expression Syntax
+    ```
+  </Card>
+  <Card title="Reference Real Templates" icon="file-code">
+    Use the 2,653+ available n8n templates:
+
+    ```
+    "Show me template #2947 and explain
+    how it works"
+    ```
+  </Card>
+  <Card title="Request Step-by-Step" icon="list-ol">
+    Ask for incremental guidance:
+
+    ```
+    "Step by step: build a webhook to
+    database workflow with validation
+    at each step"
+    ```
+  </Card>
+</CardGroup>
+
+---
+
+## Skill Limitations
+
+<Tabs>
+  <Tab title="What Skills CAN Do">
+    - Teach n8n concepts and best practices
+    - Guide MCP tool usage with correct parameters
+    - Provide proven workflow patterns
+    - Interpret validation errors and suggest fixes
+    - Explain node configurations and property dependencies
+    - Reference real templates from the n8n library
+    - Help write JavaScript and Python Code node logic
+
+  </Tab>
+  <Tab title="What Skills CANNOT Do">
+    - Execute workflows (use your n8n instance for that)
+    - Access your n8n instance directly (use n8n-mcp API tools)
+    - Modify running or active workflows
+    - Debug runtime execution errors (only configuration errors)
+
+    <Warning>
+      If API tools are unavailable, skills fall back to templates and validation-only workflows. Set `N8N_API_URL` and `N8N_API_KEY` in your `.mcp.json` to enable workflow creation and management.
+    </Warning>
+  </Tab>
+</Tabs>
+
+---
+
+## Tool Availability
+
+| Tool | Availability |
+|---|---|
+| `search_nodes` | Always available |
+| `list_nodes` | Always available |
+| `get_node_essentials` | Always available |
+| `validate_node_minimal` | Always available |
+| `validate_node_operation` | Always available |
+| `validate_workflow` | Always available |
+| `get_property_dependencies` | Always available |
+| `search_templates` | Always available |
+| `get_template` | Always available |
+| `n8n_create_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_update_partial_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_validate_workflow` (by ID) | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_list_workflows` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_get_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+| `n8n_trigger_webhook_workflow` | Requires `N8N_API_URL` + `N8N_API_KEY` |
+
+---
+
+## Troubleshooting Skill Activation
+
+<AccordionGroup>
+  <Accordion title="Skill not activating when expected">
+    Rephrase your query to include more of the skill's trigger keywords.
+
+    ```
+    Instead of: "How do I use expressions?"
+    Try:        "How do I write n8n expressions with {{}} syntax?"
+    ```
+
+    Also verify:
+    - Skills are installed in the correct directory (`~/.claude/skills/`)
+    - Each skill directory contains a `SKILL.md` with valid frontmatter
+    - Claude Code has been reloaded after installation
+
+  </Accordion>
+  <Accordion title="Wrong skill activates">
+    This is usually fine — skills complement each other and share knowledge. If you need a specific skill, be more explicit:
+
+    ```
+    "Using n8n MCP tools, search for the webhook node"
+    ```
+  </Accordion>
+  <Accordion title="Need knowledge from multiple skills">
+    Ask a comprehensive question that spans multiple domains:
+
+    ```
+    "Build, configure, and validate a webhook workflow with explanations"
+    ```
+
+    All relevant skills will activate automatically.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Getting Help
+
+- **Issues**: [github.com/czlonkowski/n8n-skills/issues](https://github.com/czlonkowski/n8n-skills/issues)
+- **Discussions**: [github.com/czlonkowski/n8n-skills/discussions](https://github.com/czlonkowski/n8n-skills/discussions)

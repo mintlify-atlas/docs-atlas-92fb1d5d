@@ -1,0 +1,569 @@
+---
+title: "JavaScript Code Nodes"
+description: "Write JavaScript in n8n Code nodes: data access patterns, return format, built-in helpers, and production-tested patterns."
+---
+
+# JavaScript Code Nodes
+
+Expert guidance for writing JavaScript code in n8n Code nodes.
+
+## Quick Start Template
+
+```javascript
+// Basic Code node template (Run Once for All Items mode)
+const items = $input.all();
+
+// Process data
+const processed = items.map(item => ({
+  json: {
+    ...item.json,
+    processed: true,
+    timestamp: new Date().toISOString()
+  }
+}));
+
+return processed;
+```
+
+**Essential rules:**
+1. Choose **"Run Once for All Items"** mode (recommended for 95% of use cases)
+2. Access data via `$input.all()`, `$input.first()`, or `$input.item`
+3. **Must return** `[{json: {...}}]` format — array of objects with a `json` key
+4. Webhook data is under `$json.body` (not `$json` directly)
+5. Built-ins available: `$helpers.httpRequest()`, `DateTime` (Luxon), `$jmespath()`
+
+<Warning>
+**Webhook data is nested under `.body`, not at the root.**
+
+This is the most common Code node mistake.
+
+```javascript
+// ❌ WRONG — returns undefined
+const name = $json.name;
+const email = $json.email;
+
+// ✅ CORRECT — webhook data is under .body
+const name = $json.body.name;
+const email = $json.body.email;
+
+// Also correct using $input
+const webhookData = $input.first().json.body;
+const name = webhookData.name;
+```
+</Warning>
+
+## Mode Selection
+
+<Tabs>
+  <Tab title="Run Once for All Items (recommended)">
+**Use for 95% of use cases.**
+
+- Code executes **once** regardless of input count
+- Access data via `$input.all()` or the `items` array
+- Best for: aggregation, filtering, batch processing, transformations
+- Faster for multiple items (single execution)
+
+```javascript
+// Example: Calculate total from all items
+const allItems = $input.all();
+const total = allItems.reduce((sum, item) => sum + (item.json.amount || 0), 0);
+
+return [{
+  json: {
+    total,
+    count: allItems.length,
+    average: total / allItems.length
+  }
+}];
+```
+
+**When to use:** Comparing items across the dataset, calculating totals, averages, statistics, sorting or ranking, deduplication, and building aggregated reports.
+
+  </Tab>
+  <Tab title="Run Once for Each Item">
+**Use for specialized cases only.**
+
+- Code executes **separately** for each input item
+- Access data via `$input.item` or `$item`
+- Best for: per-item validation with different error handling
+- Slower for large datasets
+
+```javascript
+// Example: Add processing timestamp to each item
+const item = $input.item;
+
+return [{
+  json: {
+    ...item.json,
+    processed: true,
+    processedAt: new Date().toISOString()
+  }
+}];
+```
+
+**When to use:**
+- Each item needs an independent API call
+- Item-specific transformations based on item properties
+- When items must be processed separately for business reasons
+
+**Decision shortcut:** Need to look at multiple items? Use "All Items". Each item completely independent? Use "Each Item". Not sure? Use "All Items".
+  </Tab>
+</Tabs>
+
+## Data Access Patterns
+
+```javascript
+// Pattern 1: $input.all() — most common
+const allItems = $input.all();
+const valid = allItems.filter(item => item.json.status === 'active');
+
+// Pattern 2: $input.first() — single object
+const firstItem = $input.first();
+const data = firstItem.json;
+
+// Pattern 3: $input.item — Each Item mode only
+const currentItem = $input.item;  // Only in "Each Item" mode
+
+// Pattern 4: $node — reference a specific earlier node
+const webhookData = $node["Webhook"].json;       // from Webhook node
+const httpData = $node["HTTP Request"].json;    // from HTTP Request node
+```
+
+## Return Format Requirements
+
+<Warning>
+**Always return an array of objects with a `json` property.** Any other format causes the workflow to fail.
+</Warning>
+
+```javascript
+// ✅ Single result
+return [{
+  json: {
+    field1: value1,
+    field2: value2
+  }
+}];
+
+// ✅ Multiple results
+return [
+  {json: {id: 1, data: 'first'}},
+  {json: {id: 2, data: 'second'}}
+];
+
+// ✅ Transformed array from $input.all()
+const transformed = $input.all()
+  .filter(item => item.json.valid)
+  .map(item => ({
+    json: {
+      id: item.json.id,
+      processed: true
+    }
+  }));
+return transformed;
+
+// ✅ Empty result
+return [];
+
+// ❌ WRONG — object without array wrapper
+return {
+  json: {field: value}
+};
+
+// ❌ WRONG — array without json wrapper
+return [{field: value}];
+
+// ❌ WRONG — plain string
+return "processed";
+
+// ❌ WRONG — raw $input.all() without mapping
+return $input.all();  // Missing .map() to add json wrapper
+```
+
+## Built-in Functions
+
+### `$helpers.httpRequest()`
+
+Make HTTP requests from within a Code node:
+
+```javascript
+const response = await $helpers.httpRequest({
+  method: 'GET',
+  url: 'https://api.example.com/data',
+  headers: {
+    'Authorization': 'Bearer token',
+    'Content-Type': 'application/json'
+  }
+});
+
+return [{json: {data: response}}];
+```
+
+### `DateTime` (Luxon)
+
+Date and time operations using the Luxon library:
+
+```javascript
+// Current time
+const now = DateTime.now();
+
+// Format dates
+const formatted = now.toFormat('yyyy-MM-dd');    // 2025-03-20
+const iso = now.toISO();                          // 2025-03-20T14:30:45.000Z
+
+// Date arithmetic
+const tomorrow = now.plus({days: 1});
+const lastWeek = now.minus({weeks: 1});
+const nextMonth = now.plus({months: 1});
+
+// Format result
+return [{
+  json: {
+    today: formatted,
+    tomorrow: tomorrow.toFormat('yyyy-MM-dd'),
+    oneWeekAgo: lastWeek.toFormat('yyyy-MM-dd')
+  }
+}];
+```
+
+### `$jmespath()`
+
+Query and filter JSON structures:
+
+```javascript
+const data = $input.first().json;
+
+// Filter array (users aged 18+)
+const adults = $jmespath(data, 'users[?age >= `18`]');
+
+// Extract a single field from every array element
+const names = $jmespath(data, 'users[*].name');
+
+// Nested filtering
+const activeAdmins = $jmespath(data, 'users[?role == `admin` && active == `true`]');
+
+return [{json: {adults, names, activeAdmins}}];
+```
+
+## Top 5 Error Patterns
+
+<AccordionGroup>
+  <Accordion title="#1: Empty code or missing return (most common)">
+```javascript
+// ❌ WRONG: No return statement
+const items = $input.all();
+const total = items.reduce((sum, i) => sum + i.json.amount, 0);
+// Forgot to return!
+
+// ✅ CORRECT: Always return
+const items = $input.all();
+const total = items.reduce((sum, i) => sum + i.json.amount, 0);
+return [{json: {total}}];
+```
+  </Accordion>
+  <Accordion title="#2: Using n8n expression syntax in code">
+```javascript
+// ❌ WRONG: {{ }} is for expression fields, not Code nodes
+const value = "{{ $json.field }}";
+const name = '={{$json.body.name}}';
+
+// ✅ CORRECT: Direct JavaScript access
+const value = $json.field;
+const name = $json.body.name;
+
+// ✅ ALSO CORRECT: Template literal (for interpolation)
+const message = `Hello ${$json.body.name}!`;
+```
+  </Accordion>
+  <Accordion title="#3: Incorrect return wrapper">
+```javascript
+// ❌ WRONG: Object without array
+return {json: {result: 'success'}};
+
+// ❌ WRONG: Array without json wrapper
+return [{result: 'success'}];
+
+// ✅ CORRECT
+return [{json: {result: 'success'}}];
+```
+  </Accordion>
+  <Accordion title="#4: Missing null / undefined checks">
+```javascript
+// ❌ WRONG: Crashes if user or email doesn't exist
+const email = item.json.user.email;
+
+// ✅ CORRECT: Optional chaining with default
+const email = item.json?.user?.email || 'no-email@example.com';
+
+// ✅ ALSO CORRECT: Explicit guard clause
+if (!item.json.user) {
+  return [];
+}
+const email = item.json.user.email;
+```
+  </Accordion>
+  <Accordion title="#5: Webhook body nesting">
+```javascript
+// ❌ WRONG: Webhook data is not at $json root
+const email = $json.email;
+const name = $json.name;
+
+// ✅ CORRECT: Webhook data is under .body
+const email = $json.body.email;
+const name = $json.body.name;
+
+// ✅ ALSO CORRECT: Using $input
+const body = $input.first().json.body;
+const email = body.email;
+```
+  </Accordion>
+</AccordionGroup>
+
+## 10 Production-Tested Patterns
+
+<AccordionGroup>
+  <Accordion title="1. Data transformation and field mapping">
+```javascript
+const items = $input.all();
+
+return items.map(item => {
+  const data = item.json;
+  const nameParts = (data.name || '').split(' ');
+
+  return {
+    json: {
+      first_name: nameParts[0] || '',
+      last_name: nameParts.slice(1).join(' '),
+      email: (data.email || '').toLowerCase(),
+      created_at: new Date().toISOString()
+    }
+  };
+});
+```
+  </Accordion>
+  <Accordion title="2. Aggregation and reporting">
+```javascript
+const items = $input.all();
+const total = items.reduce((sum, item) => sum + (item.json.amount || 0), 0);
+const validItems = items.filter(item => (item.json.amount || 0) > 0);
+
+return [{
+  json: {
+    total,
+    count: validItems.length,
+    average: validItems.length > 0 ? total / validItems.length : 0,
+    timestamp: new Date().toISOString()
+  }
+}];
+```
+  </Accordion>
+  <Accordion title="3. Top-N filtering and ranking">
+```javascript
+const items = $input.all();
+
+const topItems = items
+  .sort((a, b) => (b.json.score || 0) - (a.json.score || 0))
+  .slice(0, 10);
+
+return topItems.map(item => ({json: item.json}));
+```
+  </Accordion>
+  <Accordion title="4. Multi-source data aggregation">
+```javascript
+const allItems = $input.all();
+const results = [];
+
+for (const item of allItems) {
+  const sourceName = item.json.source || 'Unknown';
+
+  if (sourceName === 'API1' && item.json.data) {
+    results.push({
+      json: {
+        title: item.json.data.title,
+        source: 'API1',
+        normalizedAt: new Date().toISOString()
+      }
+    });
+  } else if (sourceName === 'API2' && item.json.record) {
+    results.push({
+      json: {
+        title: item.json.record.name,
+        source: 'API2',
+        normalizedAt: new Date().toISOString()
+      }
+    });
+  }
+}
+
+return results;
+```
+  </Accordion>
+  <Accordion title="5. Regex filtering and extraction">
+```javascript
+const items = $input.all();
+const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+
+const allEmails = [];
+for (const item of items) {
+  const text = item.json.text || '';
+  const found = text.match(emailPattern);
+  if (found) allEmails.push(...found);
+}
+
+// Deduplicate
+const uniqueEmails = [...new Set(allEmails)];
+
+return [{json: {emails: uniqueEmails, count: uniqueEmails.length}}];
+```
+  </Accordion>
+  <Accordion title="6. HTTP request with error handling">
+```javascript
+try {
+  const response = await $helpers.httpRequest({
+    method: 'POST',
+    url: 'https://api.example.com/data',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({key: 'value'})
+  });
+
+  return [{json: {success: true, data: response}}];
+} catch (error) {
+  return [{
+    json: {
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    }
+  }];
+}
+```
+  </Accordion>
+  <Accordion title="7. Date manipulation with Luxon">
+```javascript
+const items = $input.all();
+
+return items.map(item => {
+  const createdAt = item.json.created_at;
+  const date = DateTime.fromISO(createdAt);
+
+  return {
+    json: {
+      ...item.json,
+      formatted_date: date.toFormat('MMMM dd, yyyy'),
+      days_ago: Math.floor(DateTime.now().diff(date, 'days').days),
+      is_recent: DateTime.now().diff(date, 'days').days < 7
+    }
+  };
+});
+```
+  </Accordion>
+  <Accordion title="8. Deduplication">
+```javascript
+const items = $input.all();
+const seen = new Set();
+
+const unique = items.filter(item => {
+  const key = item.json.email || item.json.id;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return true;
+});
+
+return unique.map(item => ({json: item.json}));
+```
+  </Accordion>
+  <Accordion title="9. Data validation and cleaning">
+```javascript
+const items = $input.all();
+
+const validated = items.map(item => {
+  const data = item.json;
+  const errors = [];
+
+  if (!data.email || !data.email.includes('@')) errors.push('Invalid email');
+  if (!data.name || data.name.trim().length === 0) errors.push('Name required');
+
+  return {
+    json: {
+      ...data,
+      name: (data.name || '').trim(),
+      email: (data.email || '').toLowerCase().trim(),
+      valid: errors.length === 0,
+      validation_errors: errors.length > 0 ? errors : null
+    }
+  };
+});
+
+return validated;
+```
+  </Accordion>
+  <Accordion title="10. Combining data from multiple nodes">
+```javascript
+// Access data from multiple earlier nodes
+const webhookBody = $node["Webhook"].json.body;
+const apiResponse = $node["HTTP Request"].json;
+
+return [{
+  json: {
+    user_id: webhookBody.user_id,
+    user_name: webhookBody.name,
+    api_data: apiResponse.data,
+    combined_at: new Date().toISOString()
+  }
+}];
+```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+```javascript
+// 1. Validate input first
+const items = $input.all();
+if (!items || items.length === 0) return [];
+
+// 2. Use try-catch for HTTP requests
+try {
+  const response = await $helpers.httpRequest({url: '...'});
+  return [{json: {success: true, data: response}}];
+} catch (error) {
+  return [{json: {success: false, error: error.message}}];
+}
+
+// 3. Prefer functional array methods
+// ✅ Good
+const processed = $input.all()
+  .filter(item => item.json.valid)
+  .map(item => ({json: {id: item.json.id}}));
+
+// 4. Filter early, process late
+// ✅ Good — filter first to reduce work
+const processed = $input.all()
+  .filter(item => item.json.status === 'active')  // Reduce first
+  .map(item => expensiveTransformation(item));     // Then transform
+
+// 5. Debug with console.log
+console.log(`Processing ${items.length} items`);
+console.log('First item:', items[0]?.json);
+```
+
+## When to Use a Code Node
+
+| Use Code Node | Use Another Node Instead |
+|---------------|-------------------------|
+| Complex multi-step transformations | Simple field mapping → **Set** node |
+| Custom business logic | Basic filtering → **Filter** node |
+| Aggregation across items | Simple conditions → **IF** / **Switch** node |
+| API response parsing with complex structure | HTTP requests only → **HTTP Request** node |
+| Recursive operations | |
+
+## Pre-Deploy Checklist
+
+- [ ] Code is not empty — has meaningful logic
+- [ ] Return statement exists
+- [ ] Return format is `[{json: {...}}]`
+- [ ] Data access uses `$input.all()`, `$input.first()`, or `$input.item`
+- [ ] No `{{ }}` expressions — using direct JavaScript access
+- [ ] Null/undefined guards with optional chaining (`?.`) or defaults
+- [ ] Webhook data accessed via `.body` if input is from a Webhook node
+- [ ] Mode is "All Items" unless per-item isolation is required
+- [ ] All code paths return the same structure

@@ -1,0 +1,553 @@
+---
+title: "MCP Tools Expert"
+description: "Master guide for using n8n-mcp MCP server tools: node discovery, validation, workflow management, templates, and deployment. HIGHEST PRIORITY skill."
+---
+
+# MCP Tools Expert
+
+<Note>
+**HIGHEST PRIORITY SKILL.** This skill covers every MCP tool provided by the n8n-mcp server. When in doubt about which tool to use, start here.
+</Note>
+
+Master guide for using n8n-mcp MCP server tools to build workflows.
+
+## Tool Categories
+
+<CardGroup cols={2}>
+  <Card title="Node Discovery" icon="magnifying-glass">
+    `search_nodes`, `get_node` — Find and understand 800+ nodes
+  </Card>
+  <Card title="Validation" icon="circle-check">
+    `validate_node`, `validate_workflow` — Check configurations before deployment
+  </Card>
+  <Card title="Workflow Management" icon="diagram-project">
+    `n8n_create_workflow`, `n8n_update_partial_workflow`, `n8n_deploy_template`, `n8n_workflow_versions`
+  </Card>
+  <Card title="Templates" icon="clone">
+    `search_templates`, `get_template` — Access 2,700+ real workflows
+  </Card>
+</CardGroup>
+
+## Most Used Tools
+
+| Tool | Use When | Avg Speed |
+|------|----------|-----------|
+| `search_nodes` | Finding nodes by keyword | ~20ms |
+| `get_node` | Understanding node operations (`detail="standard"`) | ~10ms |
+| `validate_node` | Checking configurations (`mode="full"`) | ~100ms |
+| `n8n_update_partial_workflow` | Editing workflows **(MOST USED — 38,287 uses, 99% success)** | 50–200ms |
+| `n8n_create_workflow` | Creating workflows from scratch | 100–500ms |
+| `validate_workflow` | Checking complete workflow structure | 100–500ms |
+| `n8n_deploy_template` | Deploying a template to your n8n instance | 200–500ms |
+
+## Tool Selection Guide
+
+### Finding the Right Node
+
+```javascript
+// Step 1: Search (fast!)
+search_nodes({query: "slack"})
+// Returns: nodes-base.slack, nodes-base.slackTrigger
+
+// Step 2: Get standard details (~18s avg user review time)
+get_node({nodeType: "nodes-base.slack", includeExamples: true})
+// Returns: operations, properties, real template configs
+
+// Step 3 (optional): Get readable docs
+get_node({nodeType: "nodes-base.slack", mode: "docs"})
+```
+
+**Common pattern**: `search_nodes` → `get_node` (18s average between steps)
+
+### Validating a Configuration
+
+```javascript
+// Step 1: Quick required fields check
+validate_node({nodeType: "nodes-base.slack", config: {}, mode: "minimal"})
+
+// Step 2: Full pre-deployment validation
+validate_node({
+  nodeType: "nodes-base.slack",
+  config: {resource: "message", operation: "post", channel: "#general", text: "Hello!"},
+  profile: "runtime"  // Recommended!
+})
+
+// Step 3: Fix errors and repeat (~23s thinking, ~58s fixing per cycle)
+```
+
+### Managing Workflows
+
+```javascript
+// 1. Create
+n8n_create_workflow({name, nodes, connections})
+
+// 2. Validate
+n8n_validate_workflow({id})
+
+// 3. Edit (iteratively — 56s avg between edits)
+n8n_update_partial_workflow({id, intent: "...", operations: [...]})
+
+// 4. Validate again
+n8n_validate_workflow({id})
+
+// 5. Activate
+n8n_update_partial_workflow({
+  id,
+  intent: "Activate for production",
+  operations: [{type: "activateWorkflow"}]
+})
+```
+
+## Critical: nodeType Format Differences
+
+<Warning>
+**Two different `nodeType` formats are used by different tools.** Using the wrong format causes "Node not found" errors.
+</Warning>
+
+<Tabs>
+  <Tab title="Search & Validate Tools (Short Prefix)">
+```javascript
+// Use SHORT prefix with:
+// search_nodes, get_node, validate_node, validate_workflow
+
+"nodes-base.slack"
+"nodes-base.httpRequest"
+"nodes-base.webhook"
+"nodes-langchain.agent"
+```
+  </Tab>
+  <Tab title="Workflow Tools (Full Prefix)">
+```javascript
+// Use FULL prefix with:
+// n8n_create_workflow, n8n_update_partial_workflow
+
+"n8n-nodes-base.slack"
+"n8n-nodes-base.httpRequest"
+"n8n-nodes-base.webhook"
+"@n8n/n8n-nodes-langchain.agent"
+```
+  </Tab>
+  <Tab title="Conversion">
+```javascript
+// search_nodes returns BOTH formats:
+{
+  "nodeType": "nodes-base.slack",           // For search/validate
+  "workflowNodeType": "n8n-nodes-base.slack" // For workflow tools
+}
+```
+  </Tab>
+</Tabs>
+
+## Validation Profiles
+
+Choose the right profile for your development stage:
+
+| Profile | When to Use | Strictness |
+|---------|-------------|------------|
+| `minimal` | Quick checks during editing | Very lenient — required fields only |
+| `runtime` | Pre-deployment validation **(recommended)** | Balanced — catches real errors |
+| `ai-friendly` | AI-generated configurations | Tolerant — reduces false positives |
+| `strict` | Production deployment | Maximum — may have false positives |
+
+```javascript
+// Always specify profile explicitly
+validate_node({
+  nodeType: "nodes-base.slack",
+  config: {...},
+  profile: "runtime"  // Don't rely on defaults
+})
+```
+
+## `get_node` Detail Levels
+
+| Detail | Tokens | Use When |
+|--------|--------|----------|
+| `minimal` | ~200 | Quick metadata only |
+| `standard` | ~1–2K | **Default — covers 95% of use cases** |
+| `full` | ~3–8K | Complex debugging only — use sparingly |
+
+### `get_node` Operation Modes
+
+```javascript
+// Standard info (default — recommended)
+get_node({nodeType: "nodes-base.httpRequest"})
+
+// Readable markdown documentation
+get_node({nodeType: "nodes-base.webhook", mode: "docs"})
+
+// Search for a specific property
+get_node({
+  nodeType: "nodes-base.httpRequest",
+  mode: "search_properties",
+  propertyQuery: "auth"
+})
+
+// Version history with breaking changes
+get_node({nodeType: "nodes-base.executeWorkflow", mode: "versions"})
+
+// Compare two versions
+get_node({
+  nodeType: "nodes-base.httpRequest",
+  mode: "compare",
+  fromVersion: "3.0",
+  toVersion: "4.1"
+})
+```
+
+## Workflow Management — All 17 Operation Types
+
+`n8n_update_partial_workflow` is the **most-used tool** in the system (38,287 uses, 99.0% success rate).
+
+<AccordionGroup>
+  <Accordion title="Node Operations (6 types)">
+```javascript
+// Add a new node
+{type: "addNode", node: {name, type, position, parameters}}
+
+// Remove a node
+{type: "removeNode", nodeName: "Transform"}
+
+// Update node properties (dot notation)
+{type: "updateNode", nodeName: "Slack", updates: {"parameters.text": "Hello!"}}
+
+// Move node position
+{type: "moveNode", nodeName: "HTTP Request", position: [500, 300]}
+
+// Enable/disable a node
+{type: "enableNode", nodeName: "Debug"}
+{type: "disableNode", nodeName: "Debug"}
+```
+  </Accordion>
+  <Accordion title="Connection Operations (5 types)">
+```javascript
+// Add a connection (supports smart parameters)
+{
+  type: "addConnection",
+  source: "Webhook",
+  target: "Slack"
+}
+
+// Remove a connection
+{type: "removeConnection", source: "IF", target: "Old Handler"}
+
+// Change connection target atomically
+{
+  type: "rewireConnection",
+  source: "Webhook",
+  from: "Old Handler",
+  to: "New Handler"
+}
+
+// Remove broken connections automatically
+{type: "cleanStaleConnections"}
+
+// Replace entire connections object
+{type: "replaceConnections", connections: {...}}
+```
+  </Accordion>
+  <Accordion title="Metadata Operations (4 types)">
+```javascript
+// Update workflow settings
+{type: "updateSettings", settings: {executionOrder: "v1"}}
+
+// Rename workflow
+{type: "updateName", name: "New Workflow Name"}
+
+// Add/remove tags
+{type: "addTag", tag: "production"}
+{type: "removeTag", tag: "draft"}
+```
+  </Accordion>
+  <Accordion title="Activation Operations (2 types)">
+```javascript
+// Activate workflow (starts responding to triggers)
+{
+  type: "activateWorkflow"
+}
+
+// Deactivate workflow
+{
+  type: "deactivateWorkflow"
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+### Smart Parameters for Connections
+
+Instead of computing `sourceIndex` manually, use semantic names:
+
+```javascript
+// IF node — use branch names
+{
+  type: "addConnection",
+  source: "IF",
+  target: "True Handler",
+  branch: "true"    // Instead of sourceIndex: 0
+}
+{
+  type: "addConnection",
+  source: "IF",
+  target: "False Handler",
+  branch: "false"   // Instead of sourceIndex: 1
+}
+
+// Switch node — use case numbers
+{
+  type: "addConnection",
+  source: "Switch",
+  target: "Handler A",
+  case: 0
+}
+```
+
+### Intent Parameter
+
+Always include `intent` for better tool responses:
+
+```javascript
+// ❌ Less helpful
+n8n_update_partial_workflow({
+  id: "abc",
+  operations: [{type: "addNode", node: {...}}]
+})
+
+// ✅ Better responses
+n8n_update_partial_workflow({
+  id: "abc",
+  intent: "Add error handling for API failures",
+  operations: [{type: "addNode", node: {...}}]
+})
+```
+
+## AI Connection Types
+
+All 8 AI connection types are supported via `sourceOutput`:
+
+```javascript
+// Language Model
+{
+  type: "addConnection",
+  source: "OpenAI Chat Model",
+  target: "AI Agent",
+  sourceOutput: "ai_languageModel"
+}
+
+// Tool
+{
+  type: "addConnection",
+  source: "HTTP Request Tool",
+  target: "AI Agent",
+  sourceOutput: "ai_tool"
+}
+
+// Memory
+{
+  type: "addConnection",
+  source: "Window Buffer Memory",
+  target: "AI Agent",
+  sourceOutput: "ai_memory"
+}
+```
+
+| Connection Type | `sourceOutput` Value |
+|----------------|---------------------|
+| Language Model | `ai_languageModel` |
+| Tool | `ai_tool` |
+| Memory | `ai_memory` |
+| Output Parser | `ai_outputParser` |
+| Embedding | `ai_embedding` |
+| Vector Store | `ai_vectorStore` |
+| Document | `ai_document` |
+| Text Splitter | `ai_textSplitter` |
+
+## Template Usage
+
+```javascript
+// Search by keyword
+search_templates({query: "webhook slack", limit: 20})
+
+// Search by node types used
+search_templates({
+  searchMode: "by_nodes",
+  nodeTypes: ["n8n-nodes-base.httpRequest", "n8n-nodes-base.slack"]
+})
+
+// Search by task type
+search_templates({searchMode: "by_task", task: "webhook_processing"})
+
+// Get template details
+get_template({templateId: 2947, mode: "structure"})  // nodes + connections only
+get_template({templateId: 2947, mode: "full"})        // complete workflow JSON
+
+// Deploy template directly to your n8n instance
+n8n_deploy_template({
+  templateId: 2947,
+  name: "My Slack Notifier",  // optional custom name
+  autoFix: true,               // auto-fix common issues (default)
+  autoUpgradeVersions: true    // upgrade node versions (default)
+})
+// Returns: workflow ID, requiredCredentials, fixesApplied
+```
+
+## Auto-Sanitization System
+
+**Auto-sanitization runs on ALL nodes during ANY workflow update.** You do not need to manually fix operator structures.
+
+**What it fixes automatically:**
+- Binary operators (`equals`, `contains`, `greaterThan`, etc.) → removes `singleValue`
+- Unary operators (`isEmpty`, `isNotEmpty`, `true`, `false`) → adds `singleValue: true`
+- IF v2.2+ nodes → adds complete `conditions.options` metadata
+- Switch v3.2+ nodes → adds complete `conditions.options` for all rules
+
+**What it cannot fix:**
+- Broken connections (references to non-existent nodes)
+- Branch count mismatches (3 Switch rules but only 2 outputs)
+- Paradoxical corrupt states
+
+## Version Control
+
+```javascript
+// List versions
+n8n_workflow_versions({mode: "list", workflowId: "workflow-id", limit: 10})
+
+// Rollback to a previous version
+n8n_workflow_versions({
+  mode: "rollback",
+  workflowId: "workflow-id",
+  versionId: 123,
+  validateBefore: true
+})
+
+// Prune old versions
+n8n_workflow_versions({
+  mode: "prune",
+  workflowId: "workflow-id",
+  maxVersions: 10
+})
+```
+
+## Tool Availability
+
+<Tabs>
+  <Tab title="Always Available">
+    No n8n API connection needed:
+    - `search_nodes`, `get_node`
+    - `validate_node`, `validate_workflow`
+    - `search_templates`, `get_template`
+    - `tools_documentation`, `ai_agents_guide`
+
+  </Tab>
+  <Tab title="Requires n8n API">
+    Requires `N8N_API_URL` + `N8N_API_KEY`:
+    - `n8n_create_workflow`
+    - `n8n_update_partial_workflow`
+    - `n8n_validate_workflow` (by ID)
+    - `n8n_list_workflows`, `n8n_get_workflow`
+    - `n8n_test_workflow`
+    - `n8n_executions`
+    - `n8n_deploy_template`
+    - `n8n_workflow_versions`
+    - `n8n_autofix_workflow`
+
+  </Tab>
+</Tabs>
+
+## Common Tool Usage Patterns
+
+From real telemetry data:
+
+| Pattern | Occurrences | Avg Timing |
+|---------|-------------|------------|
+| `search_nodes` → `get_node` | Most common discovery | 18s between steps |
+| `n8n_update_partial_workflow` → `n8n_validate_workflow` | Edit → validate | 7,841 occurrences, 23s between |
+| `n8n_validate_workflow` → `n8n_update_partial_workflow` | Validate → fix | 7,266 occurrences, 58s between |
+| `update` → `update` → `update` → ... | Iterative building | 31,464 occurrences, 56s avg between edits |
+
+<Tip>
+Workflows are built **iteratively**, not in one shot. Expect multiple rounds of edit → validate → fix. This is normal and expected behavior.
+</Tip>
+
+## Complete Workflow Example
+
+```javascript
+// 1. Find the node
+const search = await search_nodes({query: "slack"});
+// → nodes-base.slack
+
+// 2. Understand operations
+const nodeInfo = await get_node({
+  nodeType: "nodes-base.slack",
+  includeExamples: true
+});
+
+// 3. Create the workflow
+const workflow = await n8n_create_workflow({
+  name: "Webhook to Slack",
+  nodes: [
+    {
+      id: "webhook-1",
+      name: "Webhook",
+      type: "n8n-nodes-base.webhook",  // Full prefix!
+      typeVersion: 2,
+      position: [250, 300],
+      parameters: {path: "slack-notify", httpMethod: "POST"}
+    },
+    {
+      id: "slack-1",
+      name: "Slack",
+      type: "n8n-nodes-base.slack",
+      typeVersion: 2,
+      position: [450, 300],
+      parameters: {
+        resource: "message",
+        operation: "post",
+        channel: "#general",
+        text: "={{$json.body.message}}"
+      }
+    }
+  ],
+  connections: {
+    "Webhook": {
+      "main": [[{node: "Slack", type: "main", index: 0}]]
+    }
+  }
+});
+
+// 4. Validate
+await n8n_validate_workflow({id: workflow.id});
+
+// 5. Fix issues, iterate...
+
+// 6. Activate
+await n8n_update_partial_workflow({
+  id: workflow.id,
+  intent: "Activate for production",
+  operations: [{type: "activateWorkflow"}]
+});
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Do" icon="check">
+    - Use `get_node({detail: "standard"})` by default
+    - Specify `profile: "runtime"` explicitly
+    - Use smart parameters (`branch`, `case`)
+    - Include `intent` in workflow updates
+    - Build iteratively (56s avg between edits)
+    - Validate after every significant change
+    - Use `includeExamples: true` for real configs
+
+  </Card>
+  <Card title="Don't" icon="xmark">
+    - Use `detail: "full"` unless debugging (wastes tokens)
+    - Forget the `nodes-base.*` prefix with search/validate tools
+    - Use the full `n8n-nodes-base.*` prefix with search/validate tools
+    - Skip validation profiles
+    - Try to build in one shot
+    - Manually fix auto-sanitization issues
+    - Forget to activate after building
+
+  </Card>
+</CardGroup>
