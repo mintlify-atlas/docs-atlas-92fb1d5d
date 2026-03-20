@@ -1,0 +1,85 @@
+{
+  "projectType": "general",
+  "projectName": "n8n Skills",
+  "projectDescription": "A collection of 7 expert Claude Code skills that teach AI assistants how to build production-ready n8n workflows using the n8n-mcp MCP server.",
+  "theme": "palm",
+  "primaryColor": "#7c747c",
+  "lightColor": "#0c0c0c",
+  "darkColor": "#f9f9f9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Skills",
+            "pages": [
+              "skills/overview",
+              "skills/expression-syntax",
+              "skills/mcp-tools-expert",
+              "skills/workflow-patterns",
+              "skills/validation-expert",
+              "skills/node-configuration",
+              "skills/code-javascript",
+              "skills/code-python"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/usage",
+              "guides/cross-skill-composition",
+              "guides/workflow-patterns-overview",
+              "guides/troubleshooting"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/contributing",
+              "development/testing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "7 complementary Claude Code skills for building n8n workflows",
+    "Automatic skill activation based on query context",
+    "Cross-skill composition for complex workflow building tasks",
+    "Expert n8n expression syntax guidance with common mistake catalog",
+    "n8n-mcp MCP tools expert with correct tool selection and parameter formats",
+    "5 proven workflow architectural patterns (webhook, HTTP API, database, AI, scheduled)",
+    "Validation error interpretation with auto-sanitization support",
+    "Operation-aware node configuration with property dependency guidance",
+    "JavaScript and Python code node guidance with critical limitations",
+    "Support for 525+ n8n nodes and 2,653+ workflow templates"
+  ],
+  "publicApiSurface": [
+    "skills/n8n-expression-syntax/SKILL.md",
+    "skills/n8n-mcp-tools-expert/SKILL.md",
+    "skills/n8n-workflow-patterns/SKILL.md",
+    "skills/n8n-validation-expert/SKILL.md",
+    "skills/n8n-node-configuration/SKILL.md",
+    "skills/n8n-code-javascript/SKILL.md",
+    "skills/n8n-code-python/SKILL.md",
+    "/plugin install czlonkowski/n8n-skills",
+    "search_nodes MCP tool",
+    "get_node MCP tool",
+    "validate_node MCP tool",
+    "n8n_create_workflow MCP tool",
+    "n8n_update_partial_workflow MCP tool",
+    "n8n_validate_workflow MCP tool",
+    "n8n_autofix_workflow MCP tool",
+    "search_templates MCP tool"
+  ]
+}
